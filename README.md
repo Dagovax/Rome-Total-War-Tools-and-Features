@@ -36,7 +36,12 @@ This [script](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/
 ```
 <B>NOTE:</B> A skeleton file is very advanced extracted stuff, so don't mess with removing zero's or other important stuff. Only change the same section!
 
-## License
+# RTW Multiple Turns Per Year
+This tool is a WinForm application which is an improvement and renewal of the old script (and available on later Windows versions).
+
+Simply download the [executable](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/blob/master/RTWMultipleTurnsPerYear/RTW%20Multiple%20Turns%20Per%20Year.exe) and run it (as administrator when you encounter problems). Any questions? Use the contact link. 
+
+# License
 All tools and features on this repository are created by [Sirrianus Dagovax](https://github.com/Dagovax). All Tools and Features are Free to use, but you are 
 not allowed to spread this scripts and modify them without my permission. If you know someone who misuses my scripts, don't hesitate to
 contact me.
