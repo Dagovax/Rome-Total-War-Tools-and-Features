@@ -279,7 +279,7 @@ namespace RTWMultipleTurnsPerYear
                     if(j == m_Turns - 2)
                     {
                         sw.WriteLine("\tmonitor_event FactionTurnEnd FactionType slave");
-                        sw.WriteLine("\t\tif I_Turnnumber = " + m_CurrentTurn);
+                        sw.WriteLine("\t\tif I_TurnNumber = " + m_CurrentTurn);
                         sw.WriteLine("\t\t\tconsole_command season summer");
                         sw.WriteLine("\t\tend_if");
                         sw.WriteLine("\tterminate_monitor");
