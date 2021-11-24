@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v3.1",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v3.1": {
+      "RTW.DescrNames.Libs/1.0.0": {
+        "runtime": {
+          "RTW.DescrNames.Libs.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "RTW.DescrNames.Libs/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
