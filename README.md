@@ -64,21 +64,21 @@ Simply download the [executable](https://github.com/Dagovax/Rome-Total-War-Tools
 # RTW Name Converter
 This tool will convert OG descr_names.txt file to Remastered descr_namelist.txt format.
 
-Download: [folder] (https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/RTW.NameConverter)
+Download: [folder](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/RTW.NameConverter)
 
 You need to download all files from the folder, in order to work.
 
 # RTW Name Parser
 With this tool you can add names (from internet) for new factions and automatically create the files required for the game.
 
-Download: [folder] (https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/RTW.NameParser)
+Download: [folder](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/RTW.NameParser)
 
 You need to download all files from the folder, in order to work.
 
 # RTW Text Duplicator
 This tool will just duplicate a certain text entry for given amount of times
 
-Download: [executable] (https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/raw/master/RTWTextDuplicator/Rome%20Total%20War%20(RR)%20Text%20Duplicator.exe)
+Download: [executable](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/raw/master/RTWTextDuplicator/Rome%20Total%20War%20(RR)%20Text%20Duplicator.exe)
 
 # License
 All tools and features on this repository are created by [Sirrianus Dagovax](https://github.com/Dagovax). All Tools and Features are Free to use, but you are 
