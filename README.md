@@ -80,6 +80,13 @@ This tool will just duplicate a certain text entry for given amount of times
 
 Download: [executable](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/raw/master/RTWTextDuplicator/Rome%20Total%20War%20(RR)%20Text%20Duplicator.exe)
 
+# RTW Text Translator
+Use this tool to automatically use Google Translate to make your mod's text file localizable.
+
+Download: [folder](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/RTWTextTranslator)
+
+You need to download all files from the folder, in order to work.
+
 # License
 All tools and features on this repository are created by [Sirrianus Dagovax](https://github.com/Dagovax). All Tools and Features are Free to use, but you are 
 not allowed to spread this scripts and modify them without my permission. If you know someone who misuses my scripts, don't hesitate to
