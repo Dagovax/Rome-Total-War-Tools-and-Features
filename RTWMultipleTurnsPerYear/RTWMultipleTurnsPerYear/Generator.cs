@@ -12,8 +12,10 @@ namespace RTWMultipleTurnsPerYear
         private Int32 m_WinterTurns { get; set; }
         private Boolean m_CreateBackgroundscript { get; set; }
         private String m_ScriptName { get; set; }
+        private Boolean m_MonitorEvent { get; set; }
 
-        public Generator(int start, int end, int turns, int winter, bool script, string name)
+
+    public Generator(int start, int end, int turns, int winter, bool script, string name, bool monitorEvent)
         {
             m_StartDate = start;
             m_EndDate = end;
@@ -21,6 +23,7 @@ namespace RTWMultipleTurnsPerYear
             m_WinterTurns = winter;
             m_CreateBackgroundscript = script;
             m_ScriptName = Utils.RemoveSpacesAndFirstCharUp(name);
+            m_MonitorEvent = monitorEvent;
 
             InitializeComponent();
             backgroundWorker.RunWorkerAsync();
@@ -48,7 +51,7 @@ namespace RTWMultipleTurnsPerYear
                     //Skip a lot of steps and create the standard file
                     backgroundWorker.ReportProgress(80);
                     System.Threading.Thread.Sleep(1000);
-                    Utils.CreateStandardScriptFile(m_StartDate, m_EndDate, m_Turns, m_WinterTurns);
+                    Utils.CreateStandardScriptFile(m_StartDate, m_EndDate, m_Turns, m_WinterTurns, m_MonitorEvent);
                     backgroundWorker.ReportProgress(90);
                     System.Threading.Thread.Sleep(1500);
                 }
@@ -75,7 +78,7 @@ namespace RTWMultipleTurnsPerYear
 
                     //Create the script itself
                     backgroundWorker.ReportProgress(95);
-                    Utils.CreateBackgroundScriptFile(m_ScriptName, m_StartDate, m_EndDate, m_Turns, m_WinterTurns);
+                    Utils.CreateBackgroundScriptFile(m_ScriptName, m_StartDate, m_EndDate, m_Turns, m_WinterTurns, m_MonitorEvent);
                     System.Threading.Thread.Sleep(2000);
                 }
 

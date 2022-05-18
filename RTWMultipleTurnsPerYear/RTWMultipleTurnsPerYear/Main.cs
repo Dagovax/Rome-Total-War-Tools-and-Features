@@ -31,6 +31,7 @@ namespace RTWMultipleTurnsPerYear
                 m_WinterTurnInput.Visible = false;
                 m_WinterTurnLabel.Visible = false;
                 m_CreateBackgroundscript.Visible = false;
+                m_MonitorEvent.Visible = false;
             }
             else
             {
@@ -40,6 +41,7 @@ namespace RTWMultipleTurnsPerYear
                     m_WinterTurnInput.Visible = true;
                     m_WinterTurnLabel.Visible = true;
                     m_CreateBackgroundscript.Visible = true;
+                    m_MonitorEvent.Visible = true;
                 }
             }
 
@@ -72,6 +74,7 @@ namespace RTWMultipleTurnsPerYear
                 m_WinterTurnInput.Visible = false;
                 m_WinterTurnLabel.Visible = false;
                 m_CreateBackgroundscript.Visible = false;
+                m_MonitorEvent.Visible = false;
                 m_GenerateButton.Enabled = false;
             }
             else
@@ -81,6 +84,7 @@ namespace RTWMultipleTurnsPerYear
                     m_GenerateButton.Enabled = true;
                     m_WinterTurnInput.Visible = true;
                     m_WinterTurnLabel.Visible = true;
+                    m_MonitorEvent.Visible = true;
                     m_CreateBackgroundscript.Visible = true;
                 }
             }
@@ -113,6 +117,8 @@ namespace RTWMultipleTurnsPerYear
                     m_WinterTurnLabel.Visible = false;
                     m_CreateBackgroundscript.Visible = false;
                     m_CreateBackgroundscript.Checked = false;
+                    m_MonitorEvent.Visible = false;
+                    m_MonitorEvent.Checked = false;
                     m_GenerateButton.Enabled = false;
                 }
                 else
@@ -120,6 +126,7 @@ namespace RTWMultipleTurnsPerYear
                     m_WinterTurnInput.Visible = true;
                     m_WinterTurnLabel.Visible = true;
                     m_CreateBackgroundscript.Visible = true;
+                    m_MonitorEvent.Visible = true;
                     m_GenerateButton.Enabled = true;
                     m_WinterTurnInput.Maximum = Int32.Parse(m_TurnsInput.Text);
                 }
@@ -224,7 +231,7 @@ namespace RTWMultipleTurnsPerYear
             else
             {
                 //Generate the script, use the generator dialog
-                Generator m_Generator = new Generator(m_StartYear, m_EndYear, m_Turns, m_WinterAmount, m_CreateBackgroundscript.Checked, m_ScriptNameInput.Text);
+                Generator m_Generator = new Generator(m_StartYear, m_EndYear, m_Turns, m_WinterAmount, m_CreateBackgroundscript.Checked, m_ScriptNameInput.Text, m_MonitorEvent.Checked);
                 m_Generator.Show();
                 this.Hide();
                 m_Generator.Refresh();

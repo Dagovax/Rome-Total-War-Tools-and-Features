@@ -28,7 +28,7 @@ namespace RTWMultipleTurnsPerYear
             }
         }
 
-        public static void CreateStandardScriptFile(Int32 m_StartYear, Int32 m_EndYear, Int32 m_Turns, Int32 m_UseWinter)
+        public static void CreateStandardScriptFile(Int32 m_StartYear, Int32 m_EndYear, Int32 m_Turns, Int32 m_UseWinter, Boolean m_MonitorEvent)
         {
             using (StreamWriter sw = File.CreateText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, (m_Turns.ToString()+"_turns_per_year_script.txt"))))
             {
@@ -36,11 +36,11 @@ namespace RTWMultipleTurnsPerYear
                 sw.WriteLine(";;; Generated with Dagovax's Turns Per Year Script Generator ;;;");
                 sw.WriteLine(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
                 sw.WriteLine();
-                CreateTurnsPerYearScript(sw, m_StartYear, m_EndYear, m_Turns, m_UseWinter);
+                CreateTurnsPerYearScript(sw, m_StartYear, m_EndYear, m_Turns, m_UseWinter, m_MonitorEvent);
             }
         }
 
-        public static void CreateBackgroundScriptFile(String m_CampaignName, Int32 m_StartYear, Int32 m_EndYear, Int32 m_Turns, Int32 m_UseWinter)
+        public static void CreateBackgroundScriptFile(String m_CampaignName, Int32 m_StartYear, Int32 m_EndYear, Int32 m_Turns, Int32 m_UseWinter, Boolean m_MonitorEvent)
         {
             using (StreamWriter sw = File.CreateText(Path.Combine(m_ScriptPath, m_CampaignName + "_Background_Script.txt")))
             {
@@ -65,7 +65,7 @@ namespace RTWMultipleTurnsPerYear
                 sw.WriteLine(";*****************************");
                 sw.WriteLine();
                 sw.WriteLine();
-                CreateTurnsPerYearScript(sw, m_StartYear, m_EndYear, m_Turns, m_UseWinter);
+                CreateTurnsPerYearScript(sw, m_StartYear, m_EndYear, m_Turns, m_UseWinter, m_MonitorEvent);
                 sw.WriteLine();
                 sw.WriteLine("end_script");
             }
@@ -190,7 +190,7 @@ namespace RTWMultipleTurnsPerYear
             }
         }
 
-        public static void CreateTurnsPerYearScript(StreamWriter sw, Int32 m_StartYear, Int32 m_EndYear, Int32 m_Turns, Int32 m_UseWinter)
+        public static void CreateTurnsPerYearScript(StreamWriter sw, Int32 m_StartYear, Int32 m_EndYear, Int32 m_Turns, Int32 m_UseWinter, Boolean m_MonitorEvent)
         {
             Int32 m_TotalTurns = -1;
             Int32 m_CurrentTurn = 0;
@@ -246,60 +246,87 @@ namespace RTWMultipleTurnsPerYear
             sw.WriteLine(";*************************************************");
             sw.WriteLine();
 
-            //Starting while
-            sw.WriteLine("while I_TurnNumber < "+(m_TotalTurns +1).ToString());
-            sw.WriteLine();
-            sw.WriteLine("\tsuspend_during_battle on");
-            sw.WriteLine();
+            if (m_MonitorEvent) {
+              sw.WriteLine("monitor_event FactionTurnStart FactionIsLocal");
+              sw.WriteLine();
 
-            //loop through all turns
-            for (int i = m_StartYear; i <= m_EndYear; i++)
-            {
-                for (int j = 0; j < m_Turns; j++)
-                {
-                    sw.WriteLine("\tconsole_command date "+i);
-                    //check if it needs to be summer or winter
-                    if (m_UseWinter != 0)
-                    {
-                        if (m_WinterTurnList.Contains(j))
-                        {
-                            sw.WriteLine("\tconsole_command season winter");
-                        }
-                        else
-                        {
-                            sw.WriteLine("\tconsole_command season summer");
-                        }
+              //loop through all turns
+              for (int i = m_StartYear; i <= m_EndYear; i++) {
+                for (int j = 0; j < m_Turns; j++) {
+                  sw.WriteLine("\tif I_TurnNumber = " + m_CurrentTurn);
+                  sw.WriteLine("\t\tconsole_command date " + i);
+                  //check if it needs to be summer or winter
+                  if (m_UseWinter != 0) {
+                    if (m_WinterTurnList.Contains(j)) {
+                      sw.WriteLine("\t\tconsole_command season winter");
+                    } else {
+                      sw.WriteLine("\t\tconsole_command season summer");
                     }
-                    else
-                    {
-                        sw.WriteLine("\tconsole_command season summer");
-                    }
+                  } else {
+                    sw.WriteLine("\t\tconsole_command season summer");
+                  }
 
-                    //add extra slave turn check
-                    if(j == m_Turns - 2)
-                    {
-                        sw.WriteLine("\tmonitor_event FactionTurnEnd FactionType slave");
-                        sw.WriteLine("\t\tif I_TurnNumber = " + m_CurrentTurn);
-                        sw.WriteLine("\t\t\tconsole_command season summer");
-                        sw.WriteLine("\t\tend_if");
-                        sw.WriteLine("\tterminate_monitor");
-                        sw.WriteLine("\tend_monitor");
-                    }
-
-                    sw.WriteLine("\twhile I_TurnNumber = "+ m_CurrentTurn);
-                    sw.WriteLine("\tend_while");
-                    sw.WriteLine();
-                    m_CurrentTurn++;
+                  //add extra slave turn check
+                  if (j == m_Turns - 2) {
+                    sw.WriteLine("\t\tif I_TurnNumber = " + m_CurrentTurn);
+                    sw.WriteLine("\t\t\tconsole_command season summer");
+                    sw.WriteLine("\t\tend_if");
+                  }
+                  sw.WriteLine("\tend_if");
+                  sw.WriteLine();
+                  m_CurrentTurn++;
                 }
-            }
+              }
 
-            //end the while
-            sw.WriteLine("\tselect_ui_element advisor_dismiss_button");
-            sw.WriteLine("\tsimulate_mouse_click lclick_up");
-            sw.WriteLine();
-            sw.WriteLine("end_while");
-            sw.WriteLine();
-            sw.WriteLine(";*************************************************");
+              sw.WriteLine("end_monitor");
+              sw.WriteLine(";*************************************************");
+            } else {
+              //Starting while
+              sw.WriteLine("while I_TurnNumber < " + (m_TotalTurns + 1).ToString());
+              sw.WriteLine();
+              sw.WriteLine("\tsuspend_during_battle on");
+              sw.WriteLine();
+
+              //loop through all turns
+              for (int i = m_StartYear; i <= m_EndYear; i++) {
+                for (int j = 0; j < m_Turns; j++) {
+                  sw.WriteLine("\tconsole_command date " + i);
+                  //check if it needs to be summer or winter
+                  if (m_UseWinter != 0) {
+                    if (m_WinterTurnList.Contains(j)) {
+                      sw.WriteLine("\tconsole_command season winter");
+                    } else {
+                      sw.WriteLine("\tconsole_command season summer");
+                    }
+                  } else {
+                    sw.WriteLine("\tconsole_command season summer");
+                  }
+
+                  //add extra slave turn check
+                  if (j == m_Turns - 2) {
+                    sw.WriteLine("\tmonitor_event FactionTurnEnd FactionType slave");
+                    sw.WriteLine("\t\tif I_TurnNumber = " + m_CurrentTurn);
+                    sw.WriteLine("\t\t\tconsole_command season summer");
+                    sw.WriteLine("\t\tend_if");
+                    sw.WriteLine("\tterminate_monitor");
+                    sw.WriteLine("\tend_monitor");
+                  }
+
+                  sw.WriteLine("\twhile I_TurnNumber = " + m_CurrentTurn);
+                  sw.WriteLine("\tend_while");
+                  sw.WriteLine();
+                  m_CurrentTurn++;
+                }
+              }
+
+              //end the while
+              sw.WriteLine("\tselect_ui_element advisor_dismiss_button");
+              sw.WriteLine("\tsimulate_mouse_click lclick_up");
+              sw.WriteLine();
+              sw.WriteLine("end_while");
+              sw.WriteLine();
+              sw.WriteLine(";*************************************************");
+            }
         }
 
         public static String RemoveSpacesAndFirstCharUp(String m_Input)
