@@ -569,6 +569,126 @@ fn CreateIndianElephantNumberTemplate =
 	return nrArr
 )
 
+-------------------------------------------
+--		HUMAN ELEPHANT UNIT			--
+-------------------------------------------
+
+fn CreateElephantAsHumanStringsTemplate = 
+(
+	print "...Using Indian Elephant Skeleton Format"
+	stringArr = #()
+	
+	s1 = "  0   0   0   0   2   0   0   0"
+	s2 = "  0   0   0   0   0   0   0   0"
+	s3 = "  0   0   0   0   0   0   0   0"
+	s4 = "  0   0   0   0   0   0   0   0"
+	s5 = "  0   0   0   0   0   0   0   0"
+	s6 = "  0   0   0   0   0   0   0   0"
+	s7 = "  0   0   0   0   0   0   0   0"
+	s8 = "  0   0   0   0   0   0   0   0"
+	s9 = "  0   0   0   0   0   0   0   0"
+	s10 = "  0   0   0   0   0   0   0   0"
+	s11 = "  0   0   0   0   0   0   0   0"
+	s12 = "  0   0   0   0   0   0   0   0"
+	s13 = "  0   0   0   0   0   0   0   0"
+	s14 = "  0   0   0   0   0   0   0   0"
+	s15 = "  0   0   0   0   0   0   0   0"
+	s16 = "  0   0   0   0   0   0   0   0"
+	s17 = "  0   0   0   0   0   0   0   0"
+	s18 = "  0   0   0   0   0   0   0   0"
+	s19 = "  0   0   0   0   0   0   0   0"
+	s20 = "  0   0   0   0   0   0   0   0"
+	s21 = "  0   0   0   0   0   0   0   0"
+	s22 = "  0   0   0   0   0   0   0   0"
+	s23 = "  0   0   0   0   0   0   0   0"
+	s24 = "  0   0   0   0   0   0   0   0"
+	
+	append stringArr s1
+	append stringArr s2
+	append stringArr s3
+	append stringArr s4
+	append stringArr s5
+	append stringArr s6
+	append stringArr s7
+	append stringArr s8
+	append stringArr s9
+	append stringArr s10
+	append stringArr s11
+	append stringArr s12
+	append stringArr s13
+	append stringArr s14
+	append stringArr s15
+	append stringArr s16
+	append stringArr s17
+	append stringArr s18
+	append stringArr s19
+	append stringArr s20
+	append stringArr s21
+	append stringArr s22
+	append stringArr s23
+	append stringArr s24
+	
+	return stringArr
+)
+
+-- Returns the number info after the coords, based of dagovax human based elephant
+fn CreateElephantAsHumanNumberTemplate = 
+(
+	nrArr = #()
+	
+	n1= "-1"
+	n2= " 0"
+	n3= " 1"
+	n4= " 2"
+	n5= " 3"
+	n6= " 4"
+	n7= " 2"
+	n8= " 2"
+	n9= " 7"
+	n10= " 8"
+	n11= " 2"
+	n12 = "10"
+	n13 = "11"
+	n14 = " 0"
+	n15 = "13"
+	n16 = "14"
+	n17 = " 0"
+	n18 = "16"
+	n19 = "17"
+	n20 = " 0"
+	n21 = " 0"
+	n22 = " 0"
+	n23 = " 0"
+	n24 = " 0"
+	
+	append nrArr n1
+	append nrArr n2
+	append nrArr n3
+	append nrArr n4
+	append nrArr n5
+	append nrArr n6
+	append nrArr n7
+	append nrArr n8
+	append nrArr n9
+	append nrArr n10
+	append nrArr n11
+	append nrArr n12
+	append nrArr n13
+	append nrArr n14
+	append nrArr n15
+	append nrArr n16
+	append nrArr n17
+	append nrArr n18
+	append nrArr n19
+	append nrArr n20
+	append nrArr n21
+	append nrArr n22
+	append nrArr n23
+	append nrArr n24
+	
+	return nrArr
+)
+
 utility BonePositionExporter "Bone Coordinate Exporter"
 (
 	group "Info:"
@@ -589,9 +709,10 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 		useFormat = false		
 		
 		pointers = for t in objects where (classOf t == Point) and (t.name != "Scene Root") collect t
+		dummies = for t in objects where (classOf t == Dummy) and (t.name != "Armature") collect t
 		
 		--Check if there are bones, otherwise, close message
-		if pointers.count == 0 then
+		if (pointers.count == 0 and dummies.count == 0) then
 		(
 			messageBox "There are no bones in this scene!"
 		)
@@ -607,7 +728,7 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 				label lblHeader "In the list below, select the"
 				label lblHeader2 "base skeleton you altered"
 				label nothing ""
-				dropdownlist list "Choose an option:" items:#("Standard Unit (for example fs_dagger)","Slinger (they have an extra bone)","Horse","African Elephant","Indian Elephant","\nSomething else, just give me the coords per bone please!") selection:1 height:8 
+				dropdownlist list "Choose an option:" items:#("Standard Unit (for example fs_dagger)","Slinger (they have an extra bone)","Horse","African Elephant","Indian Elephant","Dagovax's Human bone based Elephant","\nSomething else, just give me the coords per bone please!") selection:1 height:9 
 				button btn_test "Continue" height:20
 
 				fn init val:undefined =
@@ -636,7 +757,7 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 			
 			result = selectorDialog.init()
 			
-			if (result >= 6 or result == undefined) then
+			if (result >= 7 or result == undefined) then
 			(
 				useFormat = false
 				print "Not using any format"
@@ -650,7 +771,18 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 			
 			output = newScript()		
 			
-			for i in pointers do
+			boneArr = #()
+			if(pointers.count > 0) then
+			(
+				boneArr = pointers
+				print "Model imported using CAS importer script"
+			) else if (dummies.count > 0) then 
+			(
+				boneArr = dummies
+				print "Model imported using Open COLLADA importer"
+			)
+			
+			for i in boneArr do
 			(	
 				counter = counter + 1
 				tempzeros = "000000000000"
@@ -770,6 +902,12 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 							stringArr = CreateIndianElephantStringsTemplate()
 							numberArr = CreateIndianElephantNumberTemplate()
 						)
+						(result == 6):
+						(
+							--Use Dagovax's human pelvis
+							stringArr = CreateElephantAsHumanStringsTemplate()
+							numberArr = CreateElephantAsHumanNumberTemplate()
+						)
 						default:
 						(
 							stringArr = CreateSoldierStringsTemplate()
@@ -789,4 +927,3 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 		print "Succesfully created the bone skeleton coordinates!"
 	)
 )
-
