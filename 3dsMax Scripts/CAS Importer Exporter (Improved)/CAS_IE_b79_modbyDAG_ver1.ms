@@ -11,8 +11,13 @@
 --please email me so I may include the fix in future release--
 --															--
 --------------------------------------------------------------
---Current version: 0.79b--
---Last Updated: 4/4/06--
+--Current version: 0.79b modbyDAG_ver1 --
+--Last Updated: 01/31/23--
+--Notes: Support import & export for animations into collada scenes (IWTE support)  --
+-- General animation import improvement. Thank you @wilddog for helping out --
+--------------------------------------------------------------
+--Version: 0.79b--
+--4/4/06--
 --Notes: cas import in beta  --
 --Notes: cas export in beta  --
 --Notes: animation in beta   --
@@ -133,7 +138,7 @@ fn recursiveHeir rchild blist=(
 	numBones=0
 	k=1
 
-	if ( findString rchild.name "bone" )!=undefined or ( findString rchild.name "Scene Root" )!=undefined
+	if ( findString rchild.name "bone" )!=undefined or ( findString rchild.name "Scene Root" )!=undefined or ( findString rchild.name "Scene_Root" )!=undefined or ( findString rchild.name "Armature" )!=undefined
 	then append blist ( RTWBonelist name:rChild.name  )
 	if(rchild!=undefinded) then
 	while(rChild.children[k]!=undefined ) do (
@@ -194,9 +199,15 @@ fn rtw2maxVector inxyz=
 	)
 	return (point3 -inxyz.x -inxyz.z inxyz.y)
 )
-fn max2RtwVector inxyz=(
-		return (point3 -inxyz.x inxyz.z -inxyz.y)
-		)
+fn max2RtwVector inxyz=
+(
+	rootBone = getNodeByName "Armature"
+	if(rootBone != undefined) then
+	(
+		return (point3 inxyz.x inxyz.z inxyz.y)
+	)
+	return (point3 -inxyz.x inxyz.z -inxyz.y)
+)
 
 
 struct RTWMESH (
@@ -929,7 +940,7 @@ rollout CASExport "R:TW Export"  rolledUp:false
 		
 	)
 	
-	on exportAnimButton pressed do 
+	on exportAnimButton pressed do --export Animation. Dagovax -> I am trying to fix bone position export as well for all bones. Also support animations on collada export
 	(
 		
 		local importPly fname = getSaveFileName types:"CAS (*.cas)|*.cas|All (*.*)|*.*|"
@@ -940,10 +951,17 @@ rollout CASExport "R:TW Export"  rolledUp:false
 		
 		rootBone = getNodeByName "Scene Root"
 		if rootBone==undefined then (
-		MessageBox "Cannot export animation without the Scene Root bone. Verify it exists." title:"Error!" beep:false
-		fclose fp
-		return false
+			rootBone = getNodeByName "Scene_Root"
+			if rootBone==undefined then (
+				rootBone = getNodeByName "Armature"
+				if rootBone==undefined then (
+					MessageBox "Cannot export animation without the Scene Root, Scene_Root or Armature bone! Verify it exists." title:"Error!" beep:false
+					fclose fp
+					return false	
+				)
+			)
 		)
+		
 		boneList0 = #()
 		numBones = recursiveHeir rootBone boneList0
 		boneList = #()
@@ -956,15 +974,26 @@ rollout CASExport "R:TW Export"  rolledUp:false
 		WriteShort fp (numbones-1)
 		WriteByte fp 1
 		for k=1 to numframes do 
-		for i=2 to numbones  do in coordsys boneList[i].parent(
-		
-		boneList[i].rotation.controller = TCB_Rotation()
-		
-		--if i == 14 or i == 17 then n = 1 else n = 1
-		WriteFloat fp (at time k  boneList[i][3][2].rotation.x)
-		WriteFloat fp (at time k  -boneList[i][3][2].rotation.z)
-		WriteFloat fp (at time k  boneList[i][3][2].rotation.y)		
-		WriteFloat fp (at time k  boneList[i][3][2].rotation.w)
+		for i=2 to numbones  do in coordsys boneList[i].parent
+		(
+			-- ------------------------------------
+			-- Code changed by Dagovax.        		|
+			-- ------------------------------------
+			--if i == 14 or i == 17 then n = 1 else n = 1
+			if(rootBone.name == "Armature") then
+			(
+				WriteFloat fp (at time k  -boneList[i][3][2].rotation.x)
+				WriteFloat fp (at time k  -boneList[i][3][2].rotation.z)
+				WriteFloat fp (at time k  -boneList[i][3][2].rotation.y)		
+				WriteFloat fp (at time k  boneList[i][3][2].rotation.w)
+			)
+			else
+			(
+				WriteFloat fp (at time k  boneList[i][3][2].rotation.x)
+				WriteFloat fp (at time k  -boneList[i][3][2].rotation.z)
+				WriteFloat fp (at time k  boneList[i][3][2].rotation.y)		
+				WriteFloat fp (at time k  boneList[i][3][2].rotation.w)
+			)				
 		)
 		
       -- -------------------------------------
@@ -985,9 +1014,9 @@ rollout CASExport "R:TW Export"  rolledUp:false
          (
          newpos            = max2rtwvector(at time k in coordsys world boneList[1].pos)
          posdif            = newpos - oldpos
-  		   writefloat fp posdif.x
-  		   writefloat fp newpos.y
-  		   writefloat fp posdif.z
+		writefloat fp posdif.x
+  		writefloat fp newpos.y
+  		writefloat fp posdif.z
          print( "newpos : " + newpos as string )
          print( "oldpos : " + oldpos as string )
          oldpos            = newpos
@@ -1479,7 +1508,7 @@ on importAnimButton pressed do --import Animation. Dagovax -> I am trying to fix
 		numBones = 0
 		if (rootBone.name == "Armature") then
 		(
-			append boneList0 rootBone
+			--append boneList0 rootBone
 			numBones = recursiveHeir rootBone boneList0
 		) else 
 		(
@@ -1706,7 +1735,7 @@ on importAnimButton pressed do --import Animation. Dagovax -> I am trying to fix
 			-- Code changed by Dagovax.        |
 			-- ------------------------------------
 			
-			for k=1 to numFrames  do in coordsys boneList[i].parent 
+			for k=1 to numFrames do in coordsys boneList[i].parent 
 			(						
 				addnewkey boneList[i].rotation.controller k
 				

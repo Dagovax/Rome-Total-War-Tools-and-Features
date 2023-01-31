@@ -95,32 +95,40 @@ utility DAEExport "DAE multi LOD export"
 		label exptLabel1 "Min. amount of vertices"
 		label exptLabel2 "to apply ProOptimizer:"
 		spinner minVertexAmount "" width:50 height:20 align:#center type:#integer range:[0, 100000, 150]
+		radiobuttons objectMode labels:#("Skinned", "Static (Building)")
 		button exportLODS "Export" width:130 height:30
 	)
 	
 	on exportLODS pressed do
 	(
+		isBuilding = false
+		if objectMode.state == 2 then
+		(
+			isBuilding = true
+		)
 		canContinue = true
 		allBigObjects = for b in objects where (classOf b == Editable_Mesh)  collect b
-		clones = for b in allBigObjects collect (copy b)
-		for clone in clones do
-		(
-			clone.ishidden = true 
-		)
+
 		-- First get all bones
 		pointers = makeUniqueArray (for t in objects where (classOf t == Dummy) collect t)
-		if pointers.count == 0 then
+		if (isBuilding == false) then
 		(
-			messageBox "There are no bones in this scene!" title:"Error!"
-			canContinue = false
+			if pointers.count == 0 then
+			(
+				canContinue = false
+				messageBox "There are no bones in this scene!" title:"Error!"
+			)
 		)
 		
 		-- Then check if Armature is present, thust rootbone
 		armature = getNodeByName "Armature" exact:true
-		if (armature == undefined) and canContinue == true then 
+		if (isBuilding == false) then
 		(
-			messageBox "There is no Armature root bone!" title:"Error!"
-			canContinue = false
+			if (armature == undefined) and canContinue == true then 
+			(			
+				canContinue = false
+				messageBox "There is no Armature root bone!" title:"Error!"
+			)
 		)
 		
 		-- Check Skin modifier and if all vertices for each objects are weighted
@@ -129,11 +137,15 @@ utility DAEExport "DAE multi LOD export"
 			skinChecked = false
 			for obj in allBigObjects do
 			(
+				if(isBuilding) then -- Skip Skin check if the user selected building,
+				(
+					exit
+				)
 				theMods = for m in obj.modifiers where (classOf m == Skin) collect m
 				if(theMods == undefined) or (theMods.count == 0) then
 				(
-					messageBox ("There is no Skin modifier present for object " + obj.name as string) title:"Error!"
 					canContinue = false
+					messageBox ("There is no Skin modifier present for object " + obj.name as string) title:"Error!"
 					exit
 				)
 				else
@@ -156,8 +168,8 @@ utility DAEExport "DAE multi LOD export"
 					(
 						if vertAssign[i]==undefined then
 						(
-							MessageBox ("Problem occured while reading the vertex weights of vertex " + ( (i-1) as string) +" in mesh " +obj.name + ". Make sure each vertex has a bone weight") title:"Error!"
 							canContinue = false
+							MessageBox ("Problem occured while reading the vertex weights of vertex " + ( (i-1) as string) +" in mesh " +obj.name + ". Make sure each vertex has a bone weight") title:"Error!"
 							exit
 						)
 					)
@@ -167,6 +179,16 @@ utility DAEExport "DAE multi LOD export"
 			)
 		)
 	
+		clones = #{}
+		if(canContinue == true) then
+		(
+			clones = for b in allBigObjects collect (copy b)
+			for clone in clones do
+			(
+				clone.ishidden = true 
+			)
+		)
+		
 		-- Main script now
 		if(canContinue == true) then 
 		(
@@ -189,7 +211,7 @@ utility DAEExport "DAE multi LOD export"
 			)
 
 			lastpath = getINISetting maxini "MAXHistoryList" "History_00"
-			local colladaExporter = for o in exporterPlugin.classes where (o as string == "OpenCOLLADAExporter" )collect o
+			local colladaExporter = for o in exporterPlugin.classes where (o as string == "OpenCOLLADAExporter" ) collect o
 			if(colladaExporter.count == 0) then 
 			(
 				messageBox "You don't have the OpenCOLLADA plugin installed!"
@@ -202,7 +224,7 @@ utility DAEExport "DAE multi LOD export"
 				(
 					for i = 0 to 3 do
 					(
-						local ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + i as string;
+						ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + i as string;
 						case i of
 						(
 							0:
@@ -229,38 +251,41 @@ utility DAEExport "DAE multi LOD export"
 										weightArray = #()
 										newWeightArray = #()
 										newBoneArray = #()
-										boneArrayCount = skinOps.GetVertexWeightCount curr.modifiers[#Skin] i
-										if(boneArrayCount > 1) then -- Only if a vertex has multiple bones
+										if(isBuilding == false) then -- Modify skin stuff
 										(
-											highestWeight = 0.0
-											currBoneIndex = 0
-											for k=1 to boneArrayCount do
+											boneArrayCount = skinOps.GetVertexWeightCount curr.modifiers[#Skin] i
+											if(boneArrayCount > 1) then -- Only if a vertex has multiple bones
 											(
-												-- get bones index and weights
-												boneIndex = skinOps.GetVertexWeightBoneID curr.modifiers[#skin] i k
-												boneWeight = skinOps.GetVertexWeight curr.modifiers[#skin] i k
-												if(boneWeight > highestWeight) then
+												highestWeight = 0.0
+												currBoneIndex = 0
+												for k=1 to boneArrayCount do
 												(
-													currBoneIndex = boneIndex
-													highestWeight = boneWeight
+													-- get bones index and weights
+													boneIndex = skinOps.GetVertexWeightBoneID curr.modifiers[#skin] i k
+													boneWeight = skinOps.GetVertexWeight curr.modifiers[#skin] i k
+													if(boneWeight > highestWeight) then
+													(
+														currBoneIndex = boneIndex
+														highestWeight = boneWeight
+													)
+													append boneArray boneIndex
+													append weightArray boneWeight
 												)
-												append boneArray boneIndex
-												append weightArray boneWeight
+												for p in boneArray do
+												(
+													if p == currBoneIndex then
+													(
+														append newBoneArray p
+														append newWeightArray 1.0 -- Set the bone to 1.0
+													)
+													else
+													(
+														append newBoneArray p
+														append newWeightArray 0.0
+													)
+												)
+												skinOps.SetVertexWeights curr.modifiers[#Skin] i newBoneArray newWeightArray
 											)
-											for p in boneArray do
-											(
-												if p == currBoneIndex then
-												(
-													append newBoneArray p
-													append newWeightArray 1.0 -- Set the bone to 1.0
-												)
-												else
-												(
-													append newBoneArray p
-													append newWeightArray 0.0
-												)
-											)
-											skinOps.SetVertexWeights curr.modifiers[#Skin] i newBoneArray newWeightArray
 										)
 									)
 									
@@ -327,7 +352,7 @@ utility DAEExport "DAE multi LOD export"
 						)	
 						Print("Done!")				
 						Print("Exporting file: " + ePath as string + ".dae")
-						exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1];
+						exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1]
 					)
 				)
 			)
