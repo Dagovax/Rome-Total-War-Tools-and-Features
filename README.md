@@ -87,6 +87,14 @@ Download: [folder](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/
 
 You need to download all files from the folder, in order to work.
 
+# RTW Settlement Plan Editor
+This tool is an unique rework based on the ancient chinese tool to edit walls.<br/>
+Currently, you can import and export walls with this tool, with easier manipulation and movement.
+
+Contact me for more details.
+
+Download: [executable](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/raw/master/RTW.SettlementPlanEditor/Settlement%20Plan%20Editor.exe)
+
 # License
 All tools and features on this repository are created by [Sirrianus Dagovax](https://github.com/Dagovax). All Tools and Features are Free to use, but you are 
 not allowed to spread this scripts and modify them without my permission. If you know someone who misuses my scripts, don't hesitate to
