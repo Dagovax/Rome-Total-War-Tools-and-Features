@@ -770,15 +770,17 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 			)
 			
 			output = newScript()		
-			
+			isCollada = false
 			boneArr = #()
 			if(pointers.count > 0) then
 			(
 				boneArr = pointers
+				isCollada = false
 				print "Model imported using CAS importer script"
 			) else if (dummies.count > 0) then 
 			(
 				boneArr = dummies
+				isCollada = true
 				print "Model imported using Open COLLADA importer"
 			)
 			
@@ -827,6 +829,12 @@ utility BonePositionExporter "Bone Coordinate Exporter"
 					x = (i.pos.x as string)
 					y = (i.pos.y as string)
 					z = (i.pos.z as string)
+				)
+				
+				if (isCollada) then
+				(
+					x = x * -1
+					y = y * -1
 				)
 				
 				-- git rit of the scientific notation

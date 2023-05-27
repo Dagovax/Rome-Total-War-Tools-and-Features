@@ -16,8 +16,8 @@
 --										 --
 -- 			Revision history:			 --
 --										 --
--- v1.0 -- current  					 --
---										 --
+-- v1.0 -- intial version 				 --
+-- v1.1 -- fixed sometimes no export  --
 -------------------------------------------
 
 function ReplaceSpaceWithUnderscore inputString = 
@@ -224,7 +224,7 @@ utility DAEExport "DAE multi LOD export"
 				(
 					for i = 0 to 3 do
 					(
-						ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + i as string;
+						ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + i as string + ".dae";
 						case i of
 						(
 							0:
