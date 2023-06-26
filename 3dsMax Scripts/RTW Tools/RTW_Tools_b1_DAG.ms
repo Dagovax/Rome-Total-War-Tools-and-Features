@@ -28,6 +28,36 @@ function RoundFloat val dp = --rounds a float to a set number of decimal places
 	return a
 )
 
+function SortByVertex arr = -- sort object array by vertex count
+(		
+	local sortedArr = #()
+	while arr.count > 0 do
+	(
+		local highestObj = undefined
+		local currNumVerts = 0
+		local indexer = 1
+		for i=1 to arr.count do
+		(
+			obj = arr[i]
+			numVerts = getNumVerts obj
+			if(numVerts > currNumVerts) then
+			(
+				currNumVerts = numVerts
+				highestObj = obj
+				indexer = i
+			)
+		)
+		append sortedArr highestObj
+		deleteItem arr indexer
+	)
+	for obj in sortedArr do
+	(
+		numVerts = getNumVerts obj
+		print ("SortByVertex => " + obj.name + " | verts= " + numVerts as string)
+	)
+	return sortedArr
+)	
+
 function FormatSkeletonEntry val zeroes = 
 (
 	tempzeros = "000000000000"
@@ -258,12 +288,60 @@ utility RTWTools "RTW Tools"
 		)
 	)
 	
-	group "Misc:"
+	group "Engines:"
 	(
+		label engineSizeLabel1 "Calculate engine" 
+		label engineSizeLabel2 "props using a Box" 
+		button calculateEngineSize "Calc. Engine Props" width:130 height:30
+		groupBox enginesLine1 width: 130 height:2
 		label projPosLabel1 "Get the relative" 
 		label projPosLabel2 "projectile offset" 
 		button getProjOffset "Get Projectile Offset" width:130 height:30
-		groupBox miscLine1 width: 130 height:2
+	)
+	
+		-- Calculate Engine properties using a Box object
+	on calculateEngineSize pressed do
+	(
+		canContinue = true
+		
+		boxes = for b in objects where (classOf b == Box) collect b
+		if(boxes.count == 0) then
+		(
+			canContinue = false
+			messageBox "There is no Box in this scene to calculate the engine properties with!" title:"Error!"
+		)
+		
+		if(canContinue) then
+		(
+			theBox = boxes[1]
+			
+			if(theBox == undefined) then
+			(
+				canContinue = false
+				messageBox "Somehow the Box found in the scene was undefined! Try creating another one!" title:"Error!"
+			)
+			
+			if(canContinue and (theBox.height < 0)) then
+			(
+				canContinue = false
+				messageBox "The Box should have a positive height!" title:"Error!"
+			)
+			
+			if(canContinue) then
+			(
+				outLength = RoundFloat theBox.length 2
+				outWidth = RoundFloat theBox.width 2
+				outHeight = RoundFloat theBox.height 2
+				outRadius = RoundFloat (theBox.pos.y * -1) 2
+				
+				print ("engine_radius = " + (outRadius as string))
+				print ("engine_length = " + (outLength as string))
+				print ("engine_width = " + (outWidth as string))
+				print ("engine_height = " + (outHeight as string))
+				output = newScript()
+				format "engine_radius\t\t%\nengine_length\t\t%\nengine_width\t\t%\nengine_height\t\t%\n" outRadius outLength outWidth outHeight to:output
+			)
+		)
 	)
 	
 	-- Get the proejctile relative offset of a certain object
@@ -341,6 +419,117 @@ utility RTWTools "RTW Tools"
 				)
 			)
 			createDialog dialog_projOffset 210 100
+		)
+	)
+	
+	group "Misc:"
+	(
+		label groupLodsLabel1 "Group meshes that" 
+		label groupLodsLabel2 "intersect ordered by"
+		label groupLodsLabel3 "vertex count" 
+		button groupLods "Group LOD's" width:130 height:30
+	)
+	
+	-- Check all objects and check if they intersect with each other, defining multiple LODs
+	on groupLods pressed do
+	(
+		canContinue = true
+		
+		allObjects = for t in objects where ((classOf t == Editable_Mesh or classOf t == Editable_Poly) and t.isHidden == false) collect t
+		if(allObjects.count == 0) then
+		(
+			canContinue = false
+			messageBox "There are no (visible) Editable Meshes and Editable Polys in the scene!" title:"Error!"
+		)
+		
+		if(canContinue) then
+		(
+			--selected = for t in selection collect t
+			--if(canContinue and (selected.count == 0 or selected.count > 1)) then
+			--(
+			--	canContinue = false
+			--	messageBox "You need to select one mesh to check for other lods!" title:"Error!"
+			--)
+			
+			if(canContinue) then
+			(
+				lod0Arr = #()
+				lod1Arr = #()
+				lod2Arr = #()
+				lod3Arr = #()
+				for i = 1 to allObjects.count do
+				(
+					firstMesh = allObjects[i]
+					meshPoints = #()
+					
+					oPos = firstMesh.center
+					
+					resultX = RoundFloat oPos.x 1
+					resultY = RoundFloat oPos.y 1
+					resultZ = RoundFloat oPos.z 1
+					append meshPoints resultX
+					append meshPoints resultY
+					append meshPoints resultZ
+					
+					--print((resultX as string) +", "+ (resultY as string) +", " + (resultZ as string))
+					
+					localLodArr = #()
+					for i=1 to allObjects.count do
+					(
+						objCenter = allObjects[i].center
+						meshLocalPoints = #()
+						
+						meshX = RoundFloat objCenter.x 1
+						meshY = RoundFloat objCenter.y 1
+						meshZ = RoundFloat objCenter.z 1
+						append meshLocalPoints meshX
+						append meshLocalPoints meshY
+						append meshLocalPoints meshZ
+						--print (meshLocalPoints as string)
+						
+						--print (allObjects[i].name + ":" + objCenter as string)
+						if((meshLocalPoints as string) == (meshPoints as string)) then
+						(
+							append localLodArr allObjects[i]
+						)
+					)
+					--print localLodArr
+					--g = group localLodArr name:"SAMELOC"
+					
+					-- Sort by vertex count
+					sortedArr = SortByVertex localLodArr
+					for i = 1 to sortedArr.count do
+					(
+						-- Add LOD0
+						if i == 1 then
+						(
+							append lod0Arr sortedArr[i]
+						)
+						
+						-- Add LOD1
+						if i == 2 then
+						(
+							append lod1Arr sortedArr[i]
+						)
+						
+						-- Add LOD2
+						if i == 3 then
+						(
+							append lod2Arr sortedArr[i]
+						)
+						
+						-- Add LOD3
+						if i == 4 then
+						(
+							append lod3Arr sortedArr[i]
+						)
+					)
+				)
+				group lod0Arr name:"LOD0"
+				group lod1Arr name:"LOD1"
+				group lod2Arr name:"LOD2"
+				group lod3Arr name:"LOD3"
+			)
 		)
 	)
 )
