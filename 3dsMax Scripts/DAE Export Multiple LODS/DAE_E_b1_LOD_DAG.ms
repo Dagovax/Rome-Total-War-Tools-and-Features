@@ -1,6 +1,6 @@
 -------------------------------------------
 --										 --
---  COLLADA LOD exporter  --
+--  COLLADA RTW exporter  --
 --  by Sirrianus Dagovax (dagovax@gmail.com)   --
 -- 
 --										 --
@@ -12,13 +12,15 @@
 --										 --
 -------------------------------------------
 
--------------------------------------------
---										 --
--- 			Revision history:			 --
---										 --
--- v1.0 -- intial version 				 --
--- v1.1 -- fixed sometimes no export  --
--------------------------------------------
+----------------------------------------------------------
+--										 				--
+-- 			Revision history:			 				--
+--										 				--
+-- v1.0 -- intial version 				 				--
+-- v1.1 -- fixed sometimes no export 				--
+-- v1.2 -- Added default safe and ## fix  			--
+--       -- renamed the tool  			--
+----------------------------------------------------------
 
 function ReplaceSpaceWithUnderscore inputString = 
 (
@@ -52,6 +54,106 @@ function getSkinVertsByBone sk id: exact:on =
    verts
 )
 
+function ConvertBitmapNameToIWTE inString =
+(
+	local resultString = inString
+	local hh = findString resultString "##"
+	if(hh != undefined) then
+	(
+		resultString = replace resultString hh 2 "hh_"
+	)
+	
+	local ha = findString resultString "#&"
+	if(ha != undefined) then
+	(
+		resultString = replace resultString ha 2 "ha_"
+	)
+
+	local h = findString resultString "#"
+	if(h != undefined) then
+	(
+		resultString = replace resultString h 1 "h_"
+	)
+	
+	if(resultString != inString) then
+	(
+		print("Swapped texture name from '" + inString as string + "' to '" + resultString +"'")
+	)
+	
+	--print (resultString as string)
+	return resultString
+)
+
+function ConvertBitmapNameFromIWTE inString =
+(
+	resultString = inString
+	local hh = findString resultString "hh_"
+	if(hh != undefined) then
+	(
+		resultString = replace resultString hh 3 "##"
+	)
+	
+	local ha = findString resultString "ha_"
+	if(ha != undefined) then
+	(
+		resultString = replace resultString ha 3 "#&"
+	)
+
+	local h = findString resultString "h_"
+	if(h != undefined) then
+	(
+		resultString = replace resultString h 3 "#"
+	)
+	
+	if(resultString != inString) then
+	(
+		print("Swapped texture name back from '" + inString as string + "' to '" + resultString +"'")
+	)
+	
+	return resultString
+)
+
+function CheckMaterialName inBoolean =
+(
+	local allObjects = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
+	local mats = makeUniqueArray (for o in sceneMaterials collect o)
+	if(mats != undefined) then
+	(
+		for m in mats do
+		(
+			local errorArr = #()
+			for b in getClassInstances bitmapTex target:m where b != undefined  do
+			(
+				textureName = getFilenameFile b.filename;
+				if(inBoolean) then
+				(
+					result = ConvertBitmapNameToIWTE textureName
+				) else
+				(
+					result = ConvertBitmapNameFromIWTE textureName
+				)
+				newName = (getFilenamePath b.filename) + result + (getFilenameType b.filename)
+				if(doesFileExist newName) then
+				(
+					b.filename = newName
+				) else
+				(
+					if (finditem errorArr newName == 0) then
+					(
+						append errorArr newName
+						messageBox ("Could not find texture: \n\n'" + newName + "'") title:"Error!"	
+						--for o in allObjects where o.material == m do
+						--(
+							--o.material=undefined
+						--)
+						--$Armature.material = m
+					)
+				)
+			)
+		)	
+	)
+)
+
 struct VERTEX_WEIGHT (
 	obj,
 	vertexIndex,
@@ -76,27 +178,151 @@ struct VERTEX_WEIGHT (
 	)
 )
 
-utility DAEExport "DAE multi LOD export"
+utility RTWColladaTools "RTW Collada Tools"
 (
 	group "Info:"
 	(
-		label titleLabel1 "RTW LOD exporter"
+		label titleLabel1 "RTW Collada Tools"
 		label extraLabel "using openCOLLADA"
-		label titleLabel2 "v1.0" color:(color 0 20 80)
+		label titleLabel2 "v1.2" color:(color 0 20 80)
 		label empt " "
-		label titleLabel3 "Use this tool to export" color:(color 0 180 50)
-		label extraLabel2 "multiple LODS" color:(color 0 180 50)
+		label titleLabel3 "Use this tool to import" color:(color 0 180 50)
+		label titleLabel4 "Or export .DAE files." color:(color 0 180 50)
+		label extraLabel2 "Also Multi LODS support" color:(color 0 180 50)
 		HyperLink author "by Sirrianus Dagovax" align:#center address:"mailto:dagovax@gmail.com" color:(color 0 0 170) hoverColor:(color 170 0 0)
 	)
 	label fillerLabel1 " "
 	
-	group "Export:"
+	group "Import / Export:"
+	(
+		label miscLabel3 "Importing and Exporting"
+		label miscLabel4 "files with these buttons"
+		label miscLabel1 "will automatically"
+		label miscLabel2 "handle textures"
+		button importScene "Import" width:130 height:30
+		groupBox line1 width: 130 height:2
+		button exportScene "Export" width:130 height:30
+	)
+	
+	-- Load collada
+	on importScene pressed do
+	(
+		canContinue = true
+		
+		print "Starting collada import..."
+		maxini = getMAXIniFile()
+		if(maxFileName != "") then
+		(
+			sceneName = maxFileName
+			sceneNameCount = sceneName.count
+			sceneNameCount += 1
+			maxSectionIndex = findString sceneName ".max"
+			sceneNameLength = sceneNameCount - maxSectionIndex
+			sceneName = ReplaceSpaceWithUnderscore (replace sceneName maxSectionIndex sceneNameLength "")
+		)
+		else
+		(
+			sceneName = ""
+		)
+
+		lastpath = getINISetting maxini "MAXHistoryList" "History_00"
+		local colladaImporter = for o in importerPlugin.classes where (o as string == "OpenCOLLADAImporter" ) collect o
+		if(colladaImporter.count == 0) then 
+		(
+			messageBox "You don't have the OpenCOLLADA plugin installed!"
+		) else
+		(
+			print ("Found valid OpenCollada importer: " + colladaImporter[1] as string)
+			fileName = getOpenFileName caption:"Import openCOLLADA file" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ImportFile"
+			if(fileName != undefined) then 
+			(
+				importPath = (getFilenamePath fileName) + getFilenameFile fileName + ".dae";
+				Print("Importing file: " + importPath as string)
+				importFile importPath #noPrompt using:colladaImporter[1]
+				
+				CheckMaterialName false -- converts IWTE stuff to ##
+				
+				delete $EnvironmentAmbientLight
+				
+				mats = for b in sceneMaterials where b != undefined collect b
+				for i in mats do
+				(
+					diffuseMp = i.diffuseMap
+					if(diffuseMp != undefined) then
+					(
+						diffuseMp.alphasource = 2
+					)
+					
+					opacityMap = i.opacityMap
+					if(opacityMap != undefined) then
+					(
+						opacityMap.monoOutput = 1
+					)
+				)
+			)
+		)
+	)
+	
+	-- Save current scene as Collada
+	on exportScene pressed do
+	(
+		canContinue = true
+		
+		local allBigObjects = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
+		if(allBigObjects == undefined or allBigObjects.count == 0) then
+		(
+			canContinue = false
+			messageBox "There are no meshes in this scene!" title:"Error!"
+		)
+		
+		if(canContinue) then
+		(
+			print "Starting collada export..."
+			
+			maxini = getMAXIniFile()
+			if(maxFileName != "") then
+			(
+				sceneName = maxFileName
+				sceneNameCount = sceneName.count
+				sceneNameCount += 1
+				maxSectionIndex = findString sceneName ".max"
+				sceneNameLength = sceneNameCount - maxSectionIndex
+				sceneName = ReplaceSpaceWithUnderscore (replace sceneName maxSectionIndex sceneNameLength "")
+			)
+			else
+			(
+				sceneName = ""
+			)
+
+			lastpath = getINISetting maxini "MAXHistoryList" "History_00"
+			local colladaExporter = for o in exporterPlugin.classes where (o as string == "OpenCOLLADAExporter" ) collect o
+			if(colladaExporter.count == 0) then 
+			(
+				messageBox "You don't have the OpenCOLLADA plugin installed!"
+			)
+			else
+			(
+				print ("Found valid OpenCollada exporter: " + colladaExporter[1] as string)
+				fileName = getSaveFileName caption:"Export openCOLLADA file" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ExportFile" filename:sceneName
+				if(fileName != undefined) then 
+				(
+					ePath = (getFilenamePath fileName) + getFilenameFile fileName + ".dae";
+					Print("Exporting file: " + ePath as string + ".dae")
+					CheckMaterialName true
+					exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1]
+					CheckMaterialName false
+				)
+			)
+		)
+	)
+	
+	group "Multi Lods:"
 	(
 		label exptLabel1 "Min. amount of vertices"
 		label exptLabel2 "to apply ProOptimizer:"
 		spinner minVertexAmount "" width:50 height:20 align:#center type:#integer range:[0, 100000, 150]
 		radiobuttons objectMode labels:#("Skinned", "Static (Building)")
-		button exportLODS "Export" width:130 height:30
+		button exportLODS "Export LODS" width:130 height:30
 	)
 	
 	on exportLODS pressed do
@@ -107,7 +333,7 @@ utility DAEExport "DAE multi LOD export"
 			isBuilding = true
 		)
 		canContinue = true
-		allBigObjects = for b in objects where (classOf b == Editable_Mesh)  collect b
+		allBigObjects = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
 
 		-- First get all bones
 		pointers = makeUniqueArray (for t in objects where (classOf t == Dummy) collect t)
@@ -222,6 +448,7 @@ utility DAEExport "DAE multi LOD export"
 				fileName = getSaveFileName caption:"Choose your directory and enter your model name (without the _lod0)!" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ExportFile" filename:sceneName
 				if(fileName != undefined) then 
 				(
+					CheckMaterialName true
 					for i = 0 to 3 do
 					(
 						ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + i as string + ".dae";
@@ -354,6 +581,7 @@ utility DAEExport "DAE multi LOD export"
 						Print("Exporting file: " + ePath as string + ".dae")
 						exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1]
 					)
+					CheckMaterialName false
 				)
 			)
 			print ("Using clones...")
