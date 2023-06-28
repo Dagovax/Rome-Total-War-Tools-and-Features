@@ -294,6 +294,9 @@ utility RTWTools "RTW Tools"
 		label engineSizeLabel2 "props using a Box" 
 		button calculateEngineSize "Calc. Engine Props" width:130 height:30
 		groupBox enginesLine1 width: 130 height:2
+		radiobuttons obstacleType labels:#("Rectangle", "Ellipse", "Drop")
+		button calculateObstacle "Calc. Obstacle Radius" width:130 height:30
+		groupBox enginesLine2 width: 130 height:2
 		label projPosLabel1 "Get the relative" 
 		label projPosLabel2 "projectile offset" 
 		button getProjOffset "Get Projectile Offset" width:130 height:30
@@ -341,6 +344,101 @@ utility RTWTools "RTW Tools"
 				output = newScript()
 				format "engine_radius\t\t%\nengine_length\t\t%\nengine_width\t\t%\nengine_height\t\t%\n" outRadius outLength outWidth outHeight to:output
 			)
+		)
+	)
+	
+	on calculateObstacle pressed do
+	(
+		canContinue = true
+		outShape = "rectangle"
+		outY = 0
+		outX = 0
+		
+		case obstacleType.state of
+		(
+			1: -- Rectangle
+			(
+				outShape = "rectangle"
+				rectangles = for rec in objects where (classOf rec == Rectangle) collect rec
+				if(rectangles.count == 0) then
+				(
+					canContinue = false
+					messageBox "There is no Rectangle in this scene to calculate the obstacle radius with!" title:"Error!"
+				)
+				if(canContinue) then
+				(
+					theRectangle = rectangles[1]	
+					if(theRectangle == undefined) then
+					(
+						canContinue = false
+						messageBox "Somehow the Rectangle found in the scene was undefined! Try creating another one!" title:"Error!"
+					)
+					if(canContinue) then
+					(
+						outY = RoundFloat (theRectangle.length / 2) 2
+						outX = RoundFloat (theRectangle.width / 2) 2
+					)
+				)
+			)
+			
+			2: -- Ellipse
+			(
+				outShape = "ellipse"
+				ellipses = for el in objects where (classOf el == Ellipse) collect el
+				if(ellipses.count == 0) then
+				(
+					canContinue = false
+					messageBox "There is no Ellipse in this scene to calculate the obstacle radius with!" title:"Error!"
+				)
+				if(canContinue) then
+				(
+					theEllipse = ellipses[1]	
+					if(theEllipse == undefined) then
+					(
+						canContinue = false
+						messageBox "Somehow the Ellipse found in the scene was undefined! Try creating another one!" title:"Error!"
+					)
+					if(canContinue) then
+					(
+						outY = RoundFloat (theEllipse.length / 2) 2
+						outX = RoundFloat (theEllipse.width / 2) 2
+					)
+				)
+			)
+			
+			3: -- Drop
+			(
+				outShape = "drop"
+				ellipses = for el in objects where (classOf el == Ellipse) collect el
+				if(ellipses.count == 0) then
+				(
+					canContinue = false
+					messageBox "There is no Ellipse in this scene to calculate the obstacle radius with!" title:"Error!"
+				)
+				if(canContinue) then
+				(
+					theEllipse = ellipses[1]	
+					if(theEllipse == undefined) then
+					(
+						canContinue = false
+						messageBox "Somehow the Ellipse found in the scene was undefined! Try creating another one!" title:"Error!"
+					)
+					if(canContinue) then
+					(
+						outY = RoundFloat (theEllipse.length / 2) 2
+						outX = RoundFloat (theEllipse.width / 2) 2
+					)
+				)
+			)
+		)
+		
+		if (canContinue) then
+		(
+			print ("obstacle_shape = " + (outShape as string))
+			print ("obstacle_x_radius = " + (outX as string))
+			print ("obstacle_y_radius = " + (outY as string))
+			output = newScript()
+			format "obstacle_shape\t\t%\nobstacle_x_radius\t%\nobstacle_y_radius\t%\n" outShape outX outY to:output
 		)
 	)
 	
