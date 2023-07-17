@@ -36,6 +36,21 @@ This [script](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/
 ```
 <B>HINT</B>: Name the buildings/groups like they should be regarding their name in DBB. You then don't need to change the names of the output afterwards!
 
+## RTW Cas Tools
+This [script](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/3dsMax%20Scripts/RTW%20Cas%20Tools) contains support for .CAS files import and export. Currently there is only support for Animations extracted from `data/animations/pack.dat`.
+Works with both OG and IWTE (openCOLLADA) imported models.
+
+### Differences with old CAS Importer/Exporter
+This script is a big upgrade over the original .CAS animation import/export plugin, because this enables and fixes entries in the animation file.
+
+List of changes:
+- Frame speed is automatically limited to 20 fps, as this is the animation speed RTW uses
+- All animation keys (both positioning and rotation) should be done on REAL bones, so no more animating on the `Scene Root` bone. This is not a bone, which was confusing with the old script
+- You can now also move the bones individually; previously you could only move the root bone.
+- Be careful with bone positioning if you have models with multi-weighted vertices; this can cause glitches inside the game.
+
+Although this script supports the models imported using the old CAS script, I highly recommend you start using IWTE and openCOLLADA!
+
 ## RTW Multiple Vertex Bone Weight To Single
 This [script](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/3dsMax%20Scripts/RTW%20Multiple%20Vertex%20Bone%20Weight%20To%20Single) will loop through all your objects, and set all vertex weights to single bone only.
 
