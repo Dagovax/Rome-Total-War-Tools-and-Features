@@ -118,7 +118,7 @@ function LogText logString =
 )
 
 -- Check if input bone has valid position controller
-function BoneHasPositionController boneIdx frameCount =
+function BoneHasPositionController boneIdx frameStart frameEnd =
 (
 	if(boneIdx == undefined) then
 	(
@@ -136,7 +136,7 @@ function BoneHasPositionController boneIdx frameCount =
 	local intialPos = GetBoneUserParentProperty(boneIdx)
 	if(intialPos != undefined) then
 	(
-		for k = 1 to frameCount do
+		for k = frameStart to frameEnd do
 		(
 			local framePos = at time (k) in coordsys boneIdx.parent boneIdx.pos
 			local differenceX = FormatFloatValue (framePos.x - intialPos[1]) 1
@@ -148,8 +148,7 @@ function BoneHasPositionController boneIdx frameCount =
 			)
 		)
 	)
-	
-	for k = 2 to frameCount do
+	for k=(frameStart+1) to frameEnd do
 	(
 		local previousPos = at time (k-1) in coordsys boneIdx.parent boneIdx.pos
 		local currentPos = at time (k) in coordsys boneIdx.parent boneIdx.pos
@@ -165,7 +164,7 @@ function BoneHasPositionController boneIdx frameCount =
 )
 
 -- Return count of bones that have a valid position controller
-function GetNumBonesWithPosition boneList frameCount =
+function GetNumBonesWithPosition boneList frameStart frameEnd =
 (
 	if(boneList == undefined) then
 	(
@@ -179,7 +178,7 @@ function GetNumBonesWithPosition boneList frameCount =
 			counter += 1
 		) else
 		(
-			if ((BoneHasPositionController b frameCount) == true) then
+			if ((BoneHasPositionController b frameStart frameEnd) == true) then
 			(
 				counter += 1
 			)	
@@ -827,6 +826,12 @@ utility RTWCasTools "RTW Cas Tools"
 			return null
 		)
 		
+		if((animationRange.start > startFrame.value as integer) or (animationRange.end < endFrame.value)) then
+		(
+			messageBox "You need to Sync the animation frame start and end first!" title:"Error!"
+			return null
+		)
+		
 		local firstBoneTempChecker = GetBoneUserParentProperty boneList[1] -- HACK, simply gives warning if Grasp/Release tool was not used (or InitialPos not set in bone properties)
 		
 		local numFrames = 1 + (endFrame.value - startFrame.value)
@@ -835,6 +840,8 @@ utility RTWCasTools "RTW Cas Tools"
 			messageBox "Rome requires an odd count of frames for the unpacked format. The last frame will be dropped!" title:"Warning!"
 			numFrames = numFrames - 1
 		)
+		local frameStart = startFrame.value as integer
+		local frameEnd = frameStart + (numFrames-1)
 		
 		local exportFileName = getSaveFileName types:"CAS (*.cas)|*.cas|"
 		
@@ -866,7 +873,7 @@ utility RTWCasTools "RTW Cas Tools"
 			frameRate = 20 -- Set the framerate to 20
 				
 			local numBones = boneList.count		
-			local numBonesWithPosition = GetNumBonesWithPosition boneList numFrames
+			local numBonesWithPosition = GetNumBonesWithPosition boneList frameStart frameEnd
 			
 			-- Write first 3 entries
 			WriteShort casFile numframes
@@ -886,8 +893,10 @@ utility RTWCasTools "RTW Cas Tools"
 			)
 
 			-- Write rotation quaternian per frame
-			for k = 1 to numFrames do
+			local rotCounter = 0
+			for k=frameStart to frameEnd do
 			(
+				rotCounter += 1
 				for i=1 to numBones do in coordsys boneList[i].parent
 				(
 					local frameRotX = RoundFloat (at time k -boneList[i][3][2].rotation.x) 5
@@ -911,7 +920,7 @@ utility RTWCasTools "RTW Cas Tools"
 					-- write values to the log
 					if(writeLog == true) then
 					(
-						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue frameRotX 5) (FormatFloatValue frameRotZ 5) (FormatFloatValue frameRotY 5) (FormatFloatValue frameRotW 5) (k-1) (i-1) to:logFile
+						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue frameRotX 5) (FormatFloatValue frameRotZ 5) (FormatFloatValue frameRotY 5) (FormatFloatValue frameRotW 5) (rotCounter-1) (i-1) to:logFile
 					)
 				)
 			)
@@ -924,14 +933,16 @@ utility RTWCasTools "RTW Cas Tools"
 			local bonesWithPosition = #()
 			for i=1 to numBones do
 			(
-				if ((BoneHasPositionController boneList[i] numFrames) == true) then
+				if ((BoneHasPositionController boneList[i] frameStart frameEnd) == true) then
 				(
 					append bonesWithPosition boneList[i]
 				)
 			)				
 			
-			for k=1 to numFrames do
+			local frameCounter = 0
+			for k=frameStart to frameEnd do
 			(
+				frameCounter += 1
 				for i=1 to numBonesWithPosition do in coordsys bonesWithPosition[i].parent
 				(
 					local diffPos = null						
@@ -971,7 +982,7 @@ utility RTWCasTools "RTW Cas Tools"
 					-- write values to the log
 					if(writeLog == true) then
 					(
-						format "\t\t%\t\t%\t\t%\t\t# position xyz(bone idx refer to bottom of file) frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue diffPos.x 5) (FormatFloatValue diffPos.y 5) (FormatFloatValue diffPos.z 5)  (k-1) (i-1) to:logFile
+						format "\t\t%\t\t%\t\t%\t\t# position xyz(bone idx refer to bottom of file) frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue diffPos.x 5) (FormatFloatValue diffPos.y 5) (FormatFloatValue diffPos.z 5)  (frameCounter-1) (i-1) to:logFile
 					)
 				)
 			)
@@ -982,7 +993,7 @@ utility RTWCasTools "RTW Cas Tools"
 			
 			-- Doubled xyz incements
 			local doubleCounter = 0
-			for i=1 to ((numframes-1)) by 2 do
+			for i=frameStart to ((frameEnd-1)) by 2 do
 			(
 				local transit = MaxToRTWvector( (at time (i+2) in coordsys world boneList[1].pos)  - (at time i in coordsys world boneList[1].pos) ) isCollada
 				WriteVector casFile transit
@@ -1000,7 +1011,7 @@ utility RTWCasTools "RTW Cas Tools"
 			-- Doubled distance vals
 			local doubleDistanceCounter = 0
 			local ulim = ((numFrames-1)/2)
-			for k=ulim to 1 by -1 do
+			for k=(frameEnd - (ulim+1)) to frameStart by -1 do
 			(
 				local frameTest = k*2
 				local frameZ = (at time frameTest in coordsys world boneList[1].pos)[2]
@@ -1027,14 +1038,16 @@ utility RTWCasTools "RTW Cas Tools"
 			--print("Adding control bone position to root bone " + boneList[1].name)
 			local oldPos = GetBoneUserParentProperty boneList[1]
 			local oldRootPos = MaxToRTWVector(oldPos) isCollada
-			for k=1 to numFrames do
+			local controlPosCounter = 0
+			for k=frameStart to frameEnd do
 			(
+				controlPosCounter += 1
 				local newRootPos = MaxToRTWVector(at time k in coordsys parent boneList[1].pos) isCollada
 				local posDifference = newRootPos - oldRootPos
 				WriteVector casFile posDifference
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t%\t\t%\t\t# control bone position xyz at frame =\t%\n" (FormatFloatValue posDifference.x 5) (FormatFloatValue posDifference.y 5) (FormatFloatValue posDifference.z 5)  (k-1) to:logFile
+					format "\t\t%\t\t%\t\t%\t\t# control bone position xyz at frame =\t%\n" (FormatFloatValue posDifference.x 5) (FormatFloatValue posDifference.y 5) (FormatFloatValue posDifference.z 5)  (controlPosCounter-1) to:logFile
 				)
 			)
 			if(writeLog == true) then
@@ -1054,7 +1067,7 @@ utility RTWCasTools "RTW Cas Tools"
 			local wZxvecdist = 0.0
 			if(numFrames > 1) then
 			(
-				wZxvecdist = ((at time numFrames in coordsys world boneList[1].pos)[2] - (at time 1 in coordsys world boneList[1].pos)[2])
+				wZxvecdist = ((at time frameEnd in coordsys world boneList[1].pos)[2] - (at time 1 in coordsys world boneList[1].pos)[2])
 			)
 			if(isCollada == false) then
 			(
@@ -1065,7 +1078,7 @@ utility RTWCasTools "RTW Cas Tools"
 			local wXDiff = 0.0
 			if(numFrames > 1) then
 			(
-				wXDiff = ((at time numFrames in coordsys world boneList[1].pos)[1] - (at time 1 in coordsys world boneList[1].pos)[1])
+				wXDiff = ((at time frameEnd in coordsys world boneList[1].pos)[1] - (at time 1 in coordsys world boneList[1].pos)[1])
 			)
 			if(isCollada == false) then
 			(
@@ -1077,7 +1090,7 @@ utility RTWCasTools "RTW Cas Tools"
 			local wYDiff = 0.0
 			if(numFrames > 1) then
 			(
-				wYDiff = ((at time numFrames in coordsys world boneList[1].pos)[3] - (at time 1 in coordsys world boneList[1].pos)[3])
+				wYDiff = ((at time frameEnd in coordsys world boneList[1].pos)[3] - (at time 1 in coordsys world boneList[1].pos)[3])
 			)
 			WriteFloat casFile wYDiff
 			
@@ -1113,7 +1126,7 @@ utility RTWCasTools "RTW Cas Tools"
 			(
 				if(boneList[b+1] != undefined) then
 				(
-					if ((BoneHasPositionController boneList[b+1] numFrames) == true) then
+					if ((BoneHasPositionController boneList[b+1] frameStart frameEnd) == true) then
 					(
 						append bitBonePositions 1
 					) else
