@@ -345,7 +345,7 @@ utility RTWCasTools "RTW Cas Tools"
 	group "Info:"
 	(
 		label titleLabel1 "RTW CAS Tools"
-		label titleLabel2 "v1.0" color:(color 0 20 80)
+		label titleLabel2 "v1.1" color:(color 0 20 80)
 		label empt " "
 		label titleLabel3 "Use this tool to import" color:(color 0 180 50)
 		label titleLabel4 "or export .CAS files." color:(color 0 180 50)
