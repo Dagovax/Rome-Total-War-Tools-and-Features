@@ -17,9 +17,12 @@
 -- 			Revision history:			 				--
 --										 				--
 -- v1.0 -- intial version with animation				--
+-- v1.1 -- Added Grasp/Release; animation frames   --
 ----------------------------------------------------------
 
 global useLog = true
+global memoryBones = #()
+global graspWarning = false
 
 function RoundFloat val dp = --rounds a float to a set number of decimal places
 (
@@ -121,7 +124,16 @@ function BoneHasPositionController boneIdx frameCount =
 	(
 		return false
 	)
-	local intialPos = GetBoneUserParentProperty boneIdx
+	local armature = GetRootNode()
+	if(armature == undefined) then
+	(
+		return false
+	)
+	if(boneIdx.parent.name == armature.name) then
+	(
+		return true -- Always add first bone
+	)
+	local intialPos = GetBoneUserParentProperty(boneIdx)
 	if(intialPos != undefined) then
 	(
 		for k = 1 to frameCount do
@@ -162,9 +174,15 @@ function GetNumBonesWithPosition boneList frameCount =
 	local counter = 0
 	for b in boneList do
 	(
-		if ((BoneHasPositionController b frameCount) == true) then
+		if(counter == 0) then -- always add first bone!
 		(
-			counter = counter + 1
+			counter += 1
+		) else
+		(
+			if ((BoneHasPositionController b frameCount) == true) then
+			(
+				counter += 1
+			)	
 		)
 	)
 	if(counter == 0) then
@@ -247,9 +265,78 @@ function GetBoneUserParentProperty boner =
 	)
 	if(boner.parent != undefined) then
 	(
+		if(graspWarning == false) then
+		(
+			graspWarning = true
+			messageBox "There is no initial position stored in the properties of the bones.\n\nUse the 'Grasp' and 'Release' tool for best animation export." title:"Warning!"
+		)
 		return at time 0 in coordsys parent boner.pos	
 	)
 	return at time 0 boner.pos
+)
+
+-- Get the root NODE (not bone!), either Armature or Scene Root depending on imported file
+function GetRootNode =
+(
+	local armature = getNodeByName "Armature" exact:true
+	if (armature == undefined) then 
+	(			
+		armature = getNodeByName "Scene_Root" exact:true
+		if(armature == undefined) then
+		(
+			armature = getNodeByName "Scene Root" exact:true
+			if(armature == undefined) then
+			(
+				return null
+			)
+		)
+	)
+	return armature
+)
+
+-- Return a list of bones (without Armature/Scene Root)
+function GetBones =
+(
+	local armature = GetRootNode()
+	if(armature != undefined) then
+	(
+		local dummies = for t in objects where (classOf t == Dummy and t.name != armature.name and t.parent != undefined) collect t
+		local pointers = for t in objects where (classOf t == Point and t.name != armature.name and t.parent != undefined) collect t
+		if (dummies == undefined or dummies.count == 0) then
+		(
+			if(pointers == undefined or pointers.count == 0) then
+			(
+				return null
+			)
+			return pointers
+		)
+		return dummies	
+	)
+)
+
+function SceneIsCollada =
+(
+	local armature = GetRootNode()
+	if(armature != undefined) then
+	(
+		if(armature.name == "Scene Root" or armature.name == "Scene_Root") then
+		(
+			return false
+		)
+	)
+	return true
+)
+
+-- Get starting frame animation selection
+function GetStartFrame =
+(
+	return [animationRange.start, (animationRange.end - 1), animationRange.start]
+)
+
+-- Get end frame animation selection
+function GetEndFrame =
+(
+	return [(animationRange.start + 1), animationRange.end, animationRange.end]
 )
 
 -- RTW Cas upgraded version from Dagovax
@@ -264,57 +351,94 @@ utility RTWCasTools "RTW Cas Tools"
 		label titleLabel4 "or export .CAS files." color:(color 0 180 50)
 		HyperLink author "by Sirrianus Dagovax" align:#center address:"mailto:dagovax@gmail.com" color:(color 0 0 170) hoverColor:(color 170 0 0)
 	)
-	label fillerLabel1 " "
+	
+	group "Remember Bone Positions"
+	(
+		label clingLabel1 "Click on the 'Grasp' button"
+		label clingLabel2 "to copy current model's"
+		label clingLabel3 "bone positions into memory"
+		groupBox clingLine1 width: 130 height:2
+		button saveBoneState "Grasp" width:100 tooltip:"Store current relative bone positioning into script's memory. You can then switch to another scene"
+		button releaseBoneState "Release" width:100 tooltip:"Release saved relative bone positioning and store them in the bones' properties; these properties are helpfull for correct animation export!"
+	)
+	
+	-- Grasp the current scene and save the bone positions
+	on saveBoneState pressed do
+	(
+		-- First get all bones
+		local boneArray = GetBones()
+		local isCollada = SceneIsCollada()
+		memoryBones = #()
+		if(boneArray == undefined or boneArray.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
+			return null
+		)
+		
+		for i = 1 to boneArray.count do in coordsys parent
+		(
+			local b = boneArray[i]
+			SetBoneUserParentProperty b
+			
+			local oldPos = GetBoneUserParentProperty b
+			append memoryBones oldPos
+		)
+		
+		print "Grasped the current bone positions!"
+	)
+	
+	-- Release the grasped bone state to the current model
+	on releaseBoneState pressed do
+	(
+		if(memoryBones == undefined or memoryBones.count == 0) then
+		(
+			messageBox "You need to grasp initial bone positions first!\n\nLoad the model without animations and hit 'Grasp'" title:"Error!"
+			return null
+		)
+		
+		local boneArray = GetBones()
+		local isCollada = SceneIsCollada()
+		if(boneArray == undefined or boneArray.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
+			return null
+		)
+		
+		if(boneArray.count != memoryBones.count) then
+		(
+			messageBox "The grasped bone positions {"+ (memoryBones.count as string) +"} differ from the current scene bone count {"+ (boneArray.count as string) +"}!" title:"Error!"
+			return null
+		)
+		
+		for i = 1 to boneArray.count do
+		(
+			local offset = memoryBones[i]
+			local propValue = ""
+			for p=1 to 3 do
+			(
+				propValue = propValue + "%" + offset[p] as string
+			)
+			setUserProp boneArray[i] "InitialPosition" propValue
+		)
+		
+		print "Released the grasped bone positions into current scene!"
+	)
 	
 	group "Import"
 	(
-		checkbox writeImportLogCheckbox "Create import logfile" width:130 height:15 checked:false
-		button importAnimation "Import Animation" width:130 height:30
+		checkbox writeImportLogCheckbox "Create import logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .importlog.txt file at the imported animation's location"
+		button importAnimation "Import Animation" width:130 height:30 tooltip:"Import .CAS Animation"
 	)
 	
 	on importAnimation pressed do
-	(
-		-- First get all bones
-		local isCollada = true
-		local dummies = for t in objects where (classOf t == Dummy) collect t
-		local pointers = for t in objects where (classOf t == Point) collect t
-		if (dummies == undefined or dummies.count == 0) then
-		(
-			if(pointers == undefined or pointers.count == 0) then
-			(
-				messageBox "There are no bones in this scene!" title:"Error!"
-				return null	
-			)
-		)
-		
-		-- Then check if Armature is present, thust rootbone
-		local armature = getNodeByName "Armature" exact:true
-		if (armature == undefined) then 
-		(			
-			armature = getNodeByName "Scene_Root" exact:true
-			if(armature == undefined) then
-			(
-				armature = getNodeByName "Scene Root" exact:true
-				if(armature == undefined) then
-				(
-					messageBox "There is no Armature or Scene Root root bone!" title:"Error!"
-					return null
-				)
-			)
-			isCollada = false
-		)
+	(	
+		-- Then check if Armature is present, thus rootbone
+		local armature = GetRootNode()
+		local isCollada = SceneIsCollada()
 		
 		-- Set parental offset to the bone properties
 		-- collect all bones but Armature
-		local boneList = #()
-		if(isCollada) then
-		(
-			boneList = for b in objects where (classOf b == Dummy and b.name != armature.name) collect b
-		) 
-		else
-		(
-			boneList = for b in objects where (classOf b == Point and b.name != armature.name) collect b
-		)
+		local boneList = GetBones()
 		if(boneList == undefined or boneList.count == 0) then
 		(
 			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
@@ -669,60 +793,43 @@ utility RTWCasTools "RTW Cas Tools"
 	)
 	
 	group "Export"
+	(		
+		spinner startFrame "Start Frame:" range:(GetStartFrame()) type:#integer tooltip:"Set the start frame for animation to export" align:#center width:75 scale:1
+		spinner endFrame "End Frame:" range:(GetEndFrame()) type:#integer tooltip:"Set the end frame for animation to export" align:#center width:75 scale:1
+		button syncFrames "Sync" width:30 height:40 offset:[57,-43] tooltip:"Sync the spinners with active scene animation range"
+		checkbox writeLogCheckbox "Create export logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .exportlog.txt file at the exported animation's location"
+		button exportAnimation "Export Animation" width:130 height:30 tooltip:"Export .CAS Animation"
+	)
+	
+	on syncFrames pressed do
 	(
-		checkbox writeLogCheckbox "Create export logfile" width:130 height:15 checked:false
-		button exportAnimation "Export Animation" width:130 height:30
+		startFrame.range = GetStartFrame()
+		endFrame.range = GetEndFrame()
 	)
 	
 	on exportAnimation pressed do
 	(
-		-- First get all bones
-		local isCollada = true
-		local dummies = for t in objects where (classOf t == Dummy) collect t
-		local pointers = for t in objects where (classOf t == Point) collect t
-		if (dummies == undefined or dummies.count == 0) then
+		-- Check if Armature is present, thus rootbone
+		local armature = GetRootNode()
+		if(armature == undefined) then
 		(
-			if(pointers == undefined or pointers.count == 0) then
-			(
-				messageBox "There are no bones in this scene!" title:"Error!"
-				return null	
-			)
+			messageBox "There is no root node in this scene!" title:"Error!"
+			return null
 		)
+		local isCollada = SceneIsCollada()
 		
-		-- Then check if Armature is present, thust rootbone
-		local armature = getNodeByName "Armature" exact:true
-		if (armature == undefined) then 
-		(			
-			armature = getNodeByName "Scene_Root" exact:true
-			if(armature == undefined) then
-			(
-				armature = getNodeByName "Scene Root" exact:true
-				if(armature == undefined) then
-				(
-					messageBox "There is no Armature or Scene Root root bone!" title:"Error!"
-					return null
-				)
-			)
-			isCollada = false
-		)
-		
+		-- Set parental offset to the bone properties
 		-- collect all bones but Armature
-		local boneList = #()
-		if(isCollada) then
-		(
-			boneList = for b in objects where (classOf b == Dummy and b.name != armature.name) collect b
-		) 
-		else
-		(
-			boneList = for b in objects where (classOf b == Point and b.name != armature.name) collect b
-		)
+		local boneList = GetBones()
 		if(boneList == undefined or boneList.count == 0) then
 		(
 			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
 			return null
 		)
 		
-		local numFrames = 1 + (animationRange.end - animationRange.start)
+		local firstBoneTempChecker = GetBoneUserParentProperty boneList[1] -- HACK, simply gives warning if Grasp/Release tool was not used (or InitialPos not set in bone properties)
+		
+		local numFrames = 1 + (endFrame.value - startFrame.value)
 		if(mod numFrames 2 == 0) then
 		(
 			messageBox "Rome requires an odd count of frames for the unpacked format. The last frame will be dropped!" title:"Warning!"
@@ -851,8 +958,6 @@ utility RTWCasTools "RTW Cas Tools"
 					if(i != 1) then
 					(
 						diffPos = point3 (framePosX) (framePosY) (framePosZ)
-						--local tmpPos = point3 (newPosX) (newPosY) (newPosZ)
-						--at time (k) bonesPositionEnabled[i].position = RTWToMaxVector (tmpPos)
 					)
 					
 					if(isCollada == false) then
@@ -919,8 +1024,9 @@ utility RTWCasTools "RTW Cas Tools"
 			)
 			
 			-- Write control bone position
-			print("Adding control bone position to root bone " + boneList[1].name)
-			local oldRootPos = MaxToRTWVector(at time 0 in coordsys parent boneList[1].pos) isCollada
+			--print("Adding control bone position to root bone " + boneList[1].name)
+			local oldPos = GetBoneUserParentProperty boneList[1]
+			local oldRootPos = MaxToRTWVector(oldPos) isCollada
 			for k=1 to numFrames do
 			(
 				local newRootPos = MaxToRTWVector(at time k in coordsys parent boneList[1].pos) isCollada
@@ -1070,6 +1176,7 @@ utility RTWCasTools "RTW Cas Tools"
 				close logFile
 			)
 			fclose casFile
+			graspWarning = false
 		)
 		catch 
 		(
@@ -1080,6 +1187,7 @@ utility RTWCasTools "RTW Cas Tools"
 				close logFile
 			)
 			fclose casFile
+			graspWarning = false
 			throw()
 			--format "*** % ***\n%\n" (getCurrentException()) (getCurrentExceptionCallStack())
 		)

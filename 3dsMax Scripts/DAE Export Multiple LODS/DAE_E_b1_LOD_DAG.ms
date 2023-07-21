@@ -133,20 +133,16 @@ function CheckMaterialName inBoolean =
 					result = ConvertBitmapNameFromIWTE textureName
 				)
 				newName = (getFilenamePath b.filename) + result + (getFilenameType b.filename)
-				if(doesFileExist newName) then
+				b.filename = newName
+				if (inBoolean == false) then
 				(
-					b.filename = newName
-				) else
-				(
-					if (finditem errorArr newName == 0) then
+					if (not doesFileExist newName) then
 					(
-						append errorArr newName
-						messageBox ("Could not find texture: \n\n'" + newName + "'") title:"Error!"	
-						--for o in allObjects where o.material == m do
-						--(
-							--o.material=undefined
-						--)
-						--$Armature.material = m
+						if (finditem errorArr newName == 0) then
+						(
+							append errorArr newName
+							messageBox ("Could not find texture: \n\n'" + newName + "'") title:"Error!"	
+						)
 					)
 				)
 			)
