@@ -18,13 +18,66 @@
 --										 				--
 -- v1.0 -- intial version with animation				--
 -- v1.1 -- Added Grasp/Release; animation frames   --
+-- v1.2 -- Fixed errors due to scripts having duplicate functions   --
 ----------------------------------------------------------
 
 global useLog = true
 global memoryBones = #()
 global graspWarning = false
 
-function RoundFloat val dp = --rounds a float to a set number of decimal places
+-- Get the root NODE (not bone!), either Armature or Scene Root depending on imported file
+function RTWCas_GetRootNode =
+(
+	local armature = getNodeByName "Armature" exact:true
+	if (armature == undefined) then 
+	(			
+		armature = getNodeByName "Scene_Root" exact:true
+		if(armature == undefined) then
+		(
+			armature = getNodeByName "Scene Root" exact:true
+			if(armature == undefined) then
+			(
+				return null
+			)
+		)
+	)
+	return armature
+)
+
+-- Return a list of bones (without Armature/Scene Root)
+function RTWCas_GetBones =
+(
+	local armature = RTWCas_GetRootNode()
+	if(armature != undefined) then
+	(
+		local dummies = for t in objects where (classOf t == Dummy and t.name != armature.name and t.parent != undefined) collect t
+		local pointers = for t in objects where (classOf t == Point and t.name != armature.name and t.parent != undefined) collect t
+		if (dummies == undefined or dummies.count == 0) then
+		(
+			if(pointers == undefined or pointers.count == 0) then
+			(
+				return null
+			)
+			return pointers
+		)
+		return dummies	
+	)
+)
+
+function RTWCas_SceneIsCollada =
+(
+	local armature = RTWCas_GetRootNode()
+	if(armature != undefined) then
+	(
+		if(armature.name == "Scene Root" or armature.name == "Scene_Root") then
+		(
+			return false
+		)
+	)
+	return true
+)
+
+function RTWCas_RoundFloat val dp = --rounds a float to a set number of decimal places
 (
 	a = val * (10^dp)
 	b = a as integer
@@ -32,7 +85,7 @@ function RoundFloat val dp = --rounds a float to a set number of decimal places
 	return a
 )
 
-function ReverseString inString = (
+function RTWCas_ReverseString inString = (
 	outstring = ""
 	for i = 1 to inString.count do
 	(
@@ -41,7 +94,7 @@ function ReverseString inString = (
 	return outstring
 )
 
-function BinaryToInt inBinary =
+function RTWCas_BinaryToInt inBinary =
 (
 	local stringVer = inBinary as string
 	local decValue = 0
@@ -58,7 +111,7 @@ function BinaryToInt inBinary =
 	return decValue
 )
 
-function IntToBinary inInt = 
+function RTWCas_IntToBinary inInt = 
 (
 	binary = ""
 	maskSt = 1;
@@ -75,7 +128,7 @@ function IntToBinary inInt =
 	return binary
 )
 
-function FormatFloatValue val zeroes = 
+function RTWCas_FormatFloatValue val zeroes = 
 (
 	tempzeros = "000000000000"
 	if (val > -0.0001) and (val < 0.0001) then
@@ -95,7 +148,6 @@ function FormatFloatValue val zeroes =
 	
 	-- fill string with extra zeros before using substring
 	val = (val as string) + tempzeros
-	
 	-- Set the string length
 	val = substring val 1 (3 + zeroes)
 	
@@ -106,7 +158,7 @@ function FormatFloatValue val zeroes =
 	return val
 )
 
-function LogText logString = 
+function RTWCas_LogText logString = 
 (
 	if(logString != undefined) then
 	(
@@ -118,13 +170,13 @@ function LogText logString =
 )
 
 -- Check if input bone has valid position controller
-function BoneHasPositionController boneIdx frameStart frameEnd =
+function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd =
 (
 	if(boneIdx == undefined) then
 	(
 		return false
 	)
-	local armature = GetRootNode()
+	local armature = RTWCas_GetRootNode()
 	if(armature == undefined) then
 	(
 		return false
@@ -133,15 +185,20 @@ function BoneHasPositionController boneIdx frameStart frameEnd =
 	(
 		return true -- Always add first bone
 	)
-	local intialPos = GetBoneUserParentProperty(boneIdx)
+	local intialPos = RTWCas_GetBoneUserParentProperty boneIdx
+	local forcePosition = getUserProp boneIdx "ForcePosition"
+	if (forcePosition != undefined) then
+	(
+		return true
+	)
 	if(intialPos != undefined) then
 	(
 		for k = frameStart to frameEnd do
 		(
 			local framePos = at time (k) in coordsys boneIdx.parent boneIdx.pos
-			local differenceX = FormatFloatValue (framePos.x - intialPos[1]) 1
-			local differenceY = FormatFloatValue (framePos.y - intialPos[2]) 1
-			local differenceZ = FormatFloatValue (framePos.z - intialPos[3]) 1
+			local differenceX = RTWCas_FormatFloatValue (framePos.x - intialPos[1]) 1
+			local differenceY = RTWCas_FormatFloatValue (framePos.y - intialPos[2]) 1
+			local differenceZ = RTWCas_FormatFloatValue (framePos.z - intialPos[3]) 1
 			if(differenceX as string != " 0.0" or differenceY as string != " 0.0" or differenceZ as string != " 0.0") then
 			(
 				return true
@@ -152,9 +209,9 @@ function BoneHasPositionController boneIdx frameStart frameEnd =
 	(
 		local previousPos = at time (k-1) in coordsys boneIdx.parent boneIdx.pos
 		local currentPos = at time (k) in coordsys boneIdx.parent boneIdx.pos
-		local differenceX = FormatFloatValue (currentPos.x - previousPos.x) 1
-		local differenceY = FormatFloatValue (currentPos.y - previousPos.y) 1
-		local differenceZ = FormatFloatValue (currentPos.z - previousPos.z) 1
+		local differenceX = RTWCas_FormatFloatValue (currentPos.x - previousPos.x) 1
+		local differenceY = RTWCas_FormatFloatValue (currentPos.y - previousPos.y) 1
+		local differenceZ = RTWCas_FormatFloatValue (currentPos.z - previousPos.z) 1
 		if(differenceX as string != " 0.0" or differenceY as string != " 0.0" or differenceZ as string != " 0.0") then
 		(
 			return true
@@ -164,7 +221,7 @@ function BoneHasPositionController boneIdx frameStart frameEnd =
 )
 
 -- Return count of bones that have a valid position controller
-function GetNumBonesWithPosition boneList frameStart frameEnd =
+function RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd =
 (
 	if(boneList == undefined) then
 	(
@@ -178,7 +235,7 @@ function GetNumBonesWithPosition boneList frameStart frameEnd =
 			counter += 1
 		) else
 		(
-			if ((BoneHasPositionController b frameStart frameEnd) == true) then
+			if ((RTWCas_BoneHasPositionController b frameStart frameEnd) == true) then
 			(
 				counter += 1
 			)	
@@ -191,7 +248,7 @@ function GetNumBonesWithPosition boneList frameStart frameEnd =
 	return counter
 )
 
-function GetPointerPosition inputFileStream =
+function RTWCas_GetPointerPosition inputFileStream =
 (
 	if(inputFileStream == undefined) then
 	(
@@ -201,7 +258,7 @@ function GetPointerPosition inputFileStream =
 )
 
 --convert coord sys RTW x = x; RTW z = y; RTW y = z
-function MaxToRTWVector inxyz isCollada =
+function RTWCas_MaxToRTWVector inxyz isCollada =
 (
 	if(isCollada) then
 	(
@@ -211,7 +268,7 @@ function MaxToRTWVector inxyz isCollada =
 )
 
 --convert coord sys max x = x; max y = z; max z = y
-function RTWToMaxVector inxyz isCollada =
+function RTWCas_RTWToMaxVector inxyz isCollada =
 (
 	if(isCollada) then
 	(
@@ -221,7 +278,7 @@ function RTWToMaxVector inxyz isCollada =
 )
 
 -- Writes a RTW vector to the .cas file. Always 3 floats
-function WriteVector fp outVec =
+function RTWCas_WriteVector fp outVec =
 (
 	WriteFloat fp outVec.x
 	WriteFloat fp outVec.y
@@ -229,18 +286,18 @@ function WriteVector fp outVec =
 )
 
 -- Set the original parent offset
-function SetBoneUserParentProperty boner =
+function RTWCas_SetBoneUserParentProperty boner override =
 (
 	if(boner == undefined) then
 	(
 		return null
 	)
 	local initialPosition = getUserProp boner "InitialPosition"
-	if initialPosition != undefined then
+	if (initialPosition != undefined and override != true) then
 	(
 		return null
 	)
-	local offset = in coordsys parent boner.pos
+	local offset = in coordsys boner.parent boner.pos
 	local propValue = ""
 	for i = 1 to 3 do
 	(
@@ -250,7 +307,7 @@ function SetBoneUserParentProperty boner =
 )
 
 -- Get the original parent offset
-function GetBoneUserParentProperty boner =
+function RTWCas_GetBoneUserParentProperty boner =
 (
 	if(boner == undefined) then
 	(
@@ -274,66 +331,14 @@ function GetBoneUserParentProperty boner =
 	return at time 0 boner.pos
 )
 
--- Get the root NODE (not bone!), either Armature or Scene Root depending on imported file
-function GetRootNode =
-(
-	local armature = getNodeByName "Armature" exact:true
-	if (armature == undefined) then 
-	(			
-		armature = getNodeByName "Scene_Root" exact:true
-		if(armature == undefined) then
-		(
-			armature = getNodeByName "Scene Root" exact:true
-			if(armature == undefined) then
-			(
-				return null
-			)
-		)
-	)
-	return armature
-)
-
--- Return a list of bones (without Armature/Scene Root)
-function GetBones =
-(
-	local armature = GetRootNode()
-	if(armature != undefined) then
-	(
-		local dummies = for t in objects where (classOf t == Dummy and t.name != armature.name and t.parent != undefined) collect t
-		local pointers = for t in objects where (classOf t == Point and t.name != armature.name and t.parent != undefined) collect t
-		if (dummies == undefined or dummies.count == 0) then
-		(
-			if(pointers == undefined or pointers.count == 0) then
-			(
-				return null
-			)
-			return pointers
-		)
-		return dummies	
-	)
-)
-
-function SceneIsCollada =
-(
-	local armature = GetRootNode()
-	if(armature != undefined) then
-	(
-		if(armature.name == "Scene Root" or armature.name == "Scene_Root") then
-		(
-			return false
-		)
-	)
-	return true
-)
-
 -- Get starting frame animation selection
-function GetStartFrame =
+function RTWCas_GetStartFrame =
 (
 	return [animationRange.start, (animationRange.end - 1), animationRange.start]
 )
 
 -- Get end frame animation selection
-function GetEndFrame =
+function RTWCas_GetEndFrame =
 (
 	return [(animationRange.start + 1), animationRange.end, animationRange.end]
 )
@@ -344,7 +349,7 @@ utility RTWCasTools "RTW Cas Tools"
 	group "Info:"
 	(
 		label titleLabel1 "RTW CAS Tools"
-		label titleLabel2 "v1.1" color:(color 0 20 80)
+		label titleLabel2 "v1.2" color:(color 0 20 80)
 		label empt " "
 		label titleLabel3 "Use this tool to import" color:(color 0 180 50)
 		label titleLabel4 "or export .CAS files." color:(color 0 180 50)
@@ -365,8 +370,8 @@ utility RTWCasTools "RTW Cas Tools"
 	on saveBoneState pressed do
 	(
 		-- First get all bones
-		local boneArray = GetBones()
-		local isCollada = SceneIsCollada()
+		local boneArray = RTWCas_GetBones()
+		local isCollada = RTWCas_SceneIsCollada()
 		memoryBones = #()
 		if(boneArray == undefined or boneArray.count == 0) then
 		(
@@ -377,9 +382,10 @@ utility RTWCasTools "RTW Cas Tools"
 		for i = 1 to boneArray.count do in coordsys parent
 		(
 			local b = boneArray[i]
-			SetBoneUserParentProperty b
+			RTWCas_SetBoneUserParentProperty b true
 			
-			local oldPos = GetBoneUserParentProperty b
+			local oldPos = RTWCas_GetBoneUserParentProperty b
+			print oldPos
 			append memoryBones oldPos
 		)
 		
@@ -395,8 +401,8 @@ utility RTWCasTools "RTW Cas Tools"
 			return null
 		)
 		
-		local boneArray = GetBones()
-		local isCollada = SceneIsCollada()
+		local boneArray = RTWCas_GetBones()
+		local isCollada = RTWCas_SceneIsCollada()
 		if(boneArray == undefined or boneArray.count == 0) then
 		(
 			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
@@ -423,6 +429,7 @@ utility RTWCasTools "RTW Cas Tools"
 		print "Released the grasped bone positions into current scene!"
 	)
 	
+	global animImportFrameChanged = false
 	group "Import"
 	(
 		checkbox writeImportLogCheckbox "Create import logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .importlog.txt file at the imported animation's location"
@@ -432,12 +439,12 @@ utility RTWCasTools "RTW Cas Tools"
 	on importAnimation pressed do
 	(	
 		-- Then check if Armature is present, thus rootbone
-		local armature = GetRootNode()
-		local isCollada = SceneIsCollada()
+		local armature = RTWCas_GetRootNode()
+		local isCollada = RTWCas_SceneIsCollada()
 		
 		-- Set parental offset to the bone properties
 		-- collect all bones but Armature
-		local boneList = GetBones()
+		local boneList = RTWCas_GetBones()
 		if(boneList == undefined or boneList.count == 0) then
 		(
 			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
@@ -452,9 +459,9 @@ utility RTWCasTools "RTW Cas Tools"
 			deletekeys b.position.controller #allKeys
 			b.rotation.controller = Euler_XYZ()
 			b.position.controller = Position_XYZ()
-			SetBoneUserParentProperty b
+			RTWCas_SetBoneUserParentProperty b false
 			
-			local oldPos = GetBoneUserParentProperty b
+			local oldPos = RTWCas_GetBoneUserParentProperty b
 			b.pos = oldPos
 			b.rotation = quat (0.0) (0.0) (0.0)  ( 0.0 ) 
 		)
@@ -464,8 +471,8 @@ utility RTWCasTools "RTW Cas Tools"
 		(
 			return null
 		)
-		LogText("Starting Animation Import...")
-		LogText("Reading animation from file: " + (getFilenameFile importFileName))
+		RTWCas_LogText("Starting Animation Import...")
+		RTWCas_LogText("Reading animation from file: " + (getFilenameFile importFileName))
 		
 		local logFileName = (getFilenameFile importFileName) + ".importlog.txt"
 		local logFilePath = (getFilenamePath importFileName)
@@ -477,7 +484,7 @@ utility RTWCasTools "RTW Cas Tools"
 		(
 			logFile = openFile logFileImport mode:"wt"
 			format " # -------------------------\tAnimation {%} Imported using [RTW Cas Tool] for 3ds Max by Sirrianus Dagovax\t------------------------- #\n\n" (getFilenameFile importFileName) to:logFile
-			LogText("Check the log file for details: " + (logFileImport as string))
+			RTWCas_LogText("Check the log file for details: " + (logFileImport as string))
 		)
 		
 		local casFile = fopen importFileName "rb"
@@ -493,12 +500,12 @@ utility RTWCasTools "RTW Cas Tools"
 			local numFrames = ReadShort casFile
 			if(writeLog == true) then
 			(
-				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nframe \t = number of frames as two byte int\t\t%\n" numFrames (GetPointerPosition casFile) to:logFile
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nframe \t = number of frames as two byte int\t\t%\n" numFrames (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			local numBones = ReadShort casFile
 			if(writeLog == true) then
 			(
-				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nqbones \t = number of bones as two byte int\t\t%\n" numBones (GetPointerPosition casFile) to:logFile
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nqbones \t = number of bones as two byte int\t\t%\n" numBones (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			if(numBones > boneList.count) then
 			(
@@ -518,11 +525,12 @@ utility RTWCasTools "RTW Cas Tools"
 			local numBonesWithPosition = ReadByte casFile
 			if(writeLog == true) then
 			(
-				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.npbones \t = number of bones as single byte\t\t%\n" numBonesWithPosition (GetPointerPosition casFile) to:logFile
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.npbones \t = number of bones as single byte\t\t%\n" numBonesWithPosition (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			frameRate = 20 -- Set the framerate to 20
 			animationRange = interval 1 numFrames
+			animImportFrameChanged = true			
 			
 			-- Read rotation quaternian per frame
 			local boneVecs = #()
@@ -549,13 +557,13 @@ utility RTWCasTools "RTW Cas Tools"
 					-- write values to the log
 					if(writeLog == true) then
 					(
-						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue frameRotX 5) (FormatFloatValue frameRotZ 5) (FormatFloatValue frameRotY 5) (FormatFloatValue frameRotW 5) (k-1) (i-1) to:logFile
+						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (RTWCas_FormatFloatValue frameRotX 5) (RTWCas_FormatFloatValue frameRotZ 5) (RTWCas_FormatFloatValue frameRotY 5) (RTWCas_FormatFloatValue frameRotW 5) (k-1) (i-1) to:logFile
 					)
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End quats   ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End quats   ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Read all position data. We can't animate that yet!
@@ -571,14 +579,14 @@ utility RTWCasTools "RTW Cas Tools"
 					-- write values to the log
 					if(writeLog == true) then
 					(
-						format "\t\t%\t\t%\t\t%\t\t# position xyz(bone idx refer to bottom of file) frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue relPosX 5) (FormatFloatValue relPosY 5) (FormatFloatValue relPosZ 5)  (i-1) (k-1) to:logFile
+						format "\t\t%\t\t%\t\t%\t\t# position xyz(bone idx refer to bottom of file) frame =\t%\t\tbone index = \t\t%\n" (RTWCas_FormatFloatValue relPosX 5) (RTWCas_FormatFloatValue relPosY 5) (RTWCas_FormatFloatValue relPosZ 5)  (i-1) (k-1) to:logFile
 					)
 					append bonePos (point3 (relPosX) (relPosY) (relPosZ))
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End frame pos   ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End frame pos   ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Doubled xyz incements
@@ -590,12 +598,12 @@ utility RTWCasTools "RTW Cas Tools"
 				local val3 = ReadFloat casFile
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t%\t\t%\t\t# doubled xyz increments\t\t\t\t%\n" (FormatFloatValue val1 5) (FormatFloatValue val2 5) (FormatFloatValue val3 5)  (i-1) to:logFile
+					format "\t\t%\t\t%\t\t%\t\t# doubled xyz increments\t\t\t\t%\n" (RTWCas_FormatFloatValue val1 5) (RTWCas_FormatFloatValue val2 5) (RTWCas_FormatFloatValue val3 5)  (i-1) to:logFile
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End doubled xyz increments  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End doubled xyz increments  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 
 			-- Doubled distance values
@@ -605,18 +613,18 @@ utility RTWCasTools "RTW Cas Tools"
 				local theFloat = ReadFloat casFile
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (FormatFloatValue theFloat 5)  (i-1) to:logFile
+					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue theFloat 5)  (i-1) to:logFile
 				)
 				doubleDistanceValue = doubleDistanceValue + "%" + theFloat as string
 			)
 			setUserProp armature "mysteryfloats" doubleDistanceValue	
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Read Control Bone Position, and animate first bone
-			local originalPos = GetBoneUserParentProperty boneList[1]
+			local originalPos = RTWCas_GetBoneUserParentProperty boneList[1]
 			local originalPosX = originalPos[1]
 			local originalPosY = originalPos[3] -- Y in max is Z in RTW
 			local originalPosZ = originalPos[2] -- Z in max is Y in RTW
@@ -626,16 +634,16 @@ utility RTWCasTools "RTW Cas Tools"
 				local rootPosY = ReadFloat casFile
 				local rootPosZ = ReadFloat casFile
 				local tmpPos = point3 (originalPosX + rootPosX) (originalPosY + rootPosY) (originalPosZ + rootPosZ)
-				at time (k) boneList[1].position = RTWToMaxVector (tmpPos) isCollada
+				at time (k) boneList[1].position = RTWCas_RTWToMaxVector (tmpPos) isCollada
 				
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t%\t\t%\t\t# control bone position xyz at frame =\t%\n" (FormatFloatValue rootPosX 5) (FormatFloatValue rootPosY 5) (FormatFloatValue rootPosZ 5)  (k-1) to:logFile
+					format "\t\t%\t\t%\t\t%\t\t# control bone position xyz at frame =\t%\n" (RTWCas_FormatFloatValue rootPosX 5) (RTWCas_FormatFloatValue rootPosY 5) (RTWCas_FormatFloatValue rootPosZ 5)  (k-1) to:logFile
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End control bone position  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End control bone position  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Read the 8 mysterious floats
@@ -649,8 +657,8 @@ utility RTWCasTools "RTW Cas Tools"
 			local rAfterFrames = ReadFloat casFile
 			if(writeLog == true) then
 			(
-				format "\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t#\t time, xzvecdist, xdiff, ydiff, zdiff, avdistseconds, then tenths, then after 21 frames, 0\n" (FormatFloatValue rTime 5) (FormatFloatValue rZxvecdist 5) (FormatFloatValue rXDiff 5) (FormatFloatValue rYDiff 5) (FormatFloatValue rZDiff 5) (FormatFloatValue rAvDistSeconds 5) (FormatFloatValue rTenths 5) (FormatFloatValue rAfterFrames 5)to:logFile
-				format " # -------------------------  End positions last bit almost movements  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format "\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t#\t time, xzvecdist, xdiff, ydiff, zdiff, avdistseconds, then tenths, then after 21 frames, 0\n" (RTWCas_FormatFloatValue rTime 5) (RTWCas_FormatFloatValue rZxvecdist 5) (RTWCas_FormatFloatValue rXDiff 5) (RTWCas_FormatFloatValue rYDiff 5) (RTWCas_FormatFloatValue rZDiff 5) (RTWCas_FormatFloatValue rAvDistSeconds 5) (RTWCas_FormatFloatValue rTenths 5) (RTWCas_FormatFloatValue rAfterFrames 5)to:logFile
+				format " # -------------------------  End positions last bit almost movements  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			local eightFloats = rTime as string + "%" + rZxvecdist as string + "%" + rXDiff as string + "%" + rYDiff as string + "%" + rZDiff as string + "%" + rAvDistSeconds as string + "%" + rTenths as string + "%" + rAfterFrames as string
 			setUserProp armature "eightfloats" eightFloats
@@ -662,18 +670,18 @@ utility RTWCasTools "RTW Cas Tools"
 			while not (ftell casFile == endOfFile) do
 			(
 				local nextByte = ReadByte(casFile) #unsigned
-				local byteString = ReverseString(IntToBinary(nextByte))
+				local byteString = RTWCas_ReverseString(RTWCas_IntToBinary(nextByte))
 					
 				if(writeLog == true) then
 				(
-					format "%  %  %  %  %  %  %  %\t\t\t\t\t\t\t\t\t # bit bone positions (%-% switched for ease of reading) \t\t%\n" byteString[1] byteString[2] byteString[3] byteString[4] byteString[5] byteString[6] byteString[7] byteString[8] minCounter (minCounter + 7) (GetPointerPosition casFile) to:logFile
+					format "%  %  %  %  %  %  %  %\t\t\t\t\t\t\t\t\t # bit bone positions (%-% switched for ease of reading) \t\t%\n" byteString[1] byteString[2] byteString[3] byteString[4] byteString[5] byteString[6] byteString[7] byteString[8] minCounter (minCounter + 7) (RTWCas_GetPointerPosition casFile) to:logFile
 				)
 				minCounter = minCounter + 8
 				append allBonesPositions byteString
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End bone position enablers (end of animation read)  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End bone position enablers (end of animation read)  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			bonesPositionEnabled = #()
@@ -691,80 +699,96 @@ utility RTWCasTools "RTW Cas Tools"
 			-- Something bad! animation import fails
 			if(bonesPositionEnabled.count != numBonesWithPosition) then
 			(
-				messageBox "Animation import failed: {bonesPositionEnabled.count != numBonesWithPosition}!" title:"Error!"
+				local errorMessage = ("Animation file broken: number of bones with position at end of file {" + (bonesPositionEnabled.count as string) + "} does not match the third float {" + (numBonesWithPosition as string) + "}!")
+				messageBox (errorMessage + "\n\nOnly the first occurences will be animated now!") title:"Warning!"
 				if(writeLog == true) then
 				(
-					format "\nERROR :>\t\t%\n" "Animation import failed: {bonesPositionEnabled.count != numBonesWithPosition}!" to:logFile
+					format "WARNING =>\t\t%\n" errorMessage to:logFile
 				)
-			) else
-			(
-				if(writeLog == true) then
+				if(numBonesWithPosition == 1 and allBonesPositions[1] == "0") then
 				(
-					format "\tList of bones that have position animation enabled:\n" to:logFile
-					for b in bonesPositionEnabled do
+					local oneBoneMessage = ("Because animation file is broken, it tells that the first bone does not have positioning enabled, yet it only has one bone with positioning!\n\nDo you want to apply the positioning the first bone?")
+					if (queryBox oneBoneMessage beep:true) then
+					(
+						bonesPositionEnabled = #()
+						append bonesPositionEnabled boneList[1]
+					)
+				)
+			)
+			if(writeLog == true) then
+			(
+				format "\tList of bones that have position animation enabled:\n" to:logFile
+				local counter = 1
+				for b in bonesPositionEnabled do
+				(
+					if(counter <= numBonesWithPosition) then
 					(
 						format "\t >  %\n" b.name to:logFile
-					)
-				)
-
-				local posCounter = 1
-				for k = 1 to numFrames do animate on coordsys parent
-				(
-					local boneIndex = 1
-					for i = 1 to numBonesWithPosition do
+					) else
 					(
-						local relRTWPos = bonePos[posCounter]
-						local newPosX = relRTWPos[1]
-						local newPosY = relRTWPos[2]
-						local newPosZ = relRTWPos[3]
+						format "\t >  %\t ( IGNORED )\n" b.name to:logFile
+					)
+					counter += 1
+				)
+			)
 
-						-- We do something different for the root bone (relative stuff)
-						if(i == 1) then
+			local posCounter = 1
+			for k = 1 to numFrames do animate on coordsys parent
+			(
+				local boneIndex = 1
+				for i = 1 to numBonesWithPosition do
+				(
+					local relRTWPos = bonePos[posCounter]
+					local newPosX = relRTWPos[1]
+					local newPosY = relRTWPos[2]
+					local newPosZ = relRTWPos[3]
+
+					-- We do something different for the root bone (relative stuff)
+					if(i == 1) then
+					(
+						local oldPos = RTWCas_GetBoneUserParentProperty bonesPositionEnabled[i]
+						local originalPosX = oldPos[1]
+						local originalPosY = oldPos[3] -- Y in max is Z in RTW
+						local originalPosZ = (at time (k-1) bonesPositionEnabled[i].position)[2] -- Z in max is Y in RTW
+						if(k == 1) then
 						(
-							local oldPos = GetBoneUserParentProperty bonesPositionEnabled[i]
-							local originalPosX = oldPos[1]
-							local originalPosY = oldPos[3] -- Y in max is Z in RTW
-							local originalPosZ = (at time (k-1) bonesPositionEnabled[i].position)[2] -- Z in max is Y in RTW
-							if(k == 1) then
-							(
-								originalPosZ = oldPos[2]
-							)
-							local tmpPos = point3 0.0 0.0 0.0
-							
-							local calcPosX = originalPosX
-							local calcPosZ = originalPosZ
-							if(isCollada) then
-							(
-								calcPosX = originalPosX + newPosX
-								calcPosZ = originalPosZ + newPosZ
-							)
-							else
-							(
-								calcPosX = originalPosX - newPosX
-								calcPosZ = originalPosZ - newPosZ
-							)
-							
-							if(isCollada) then
-							(
-								tmpPos = point3 (originalPosX + newPosX) (originalPosY + newPosY) calcPosZ	
-							)
-							else
-							(
-								tmpPos = point3 -calcPosX (originalPosY + newPosY) -calcPosZ
-							)
-							--print tmpPos
-							at time (k) bonesPositionEnabled[i].position = RTWToMaxVector (tmpPos) isCollada
+							originalPosZ = oldPos[2]
+						)
+						local tmpPos = point3 0.0 0.0 0.0
+						
+						local calcPosX = originalPosX
+						local calcPosZ = originalPosZ
+						if(isCollada) then
+						(
+							calcPosX = originalPosX + newPosX
+							calcPosZ = originalPosZ + newPosZ
+						)
+						else
+						(
+							calcPosX = originalPosX - newPosX
+							calcPosZ = originalPosZ - newPosZ
 						)
 						
-						-- All other bones seems to be absolute offset from the parent
-						if(i != 1) then
+						if(isCollada) then
 						(
-							local tmpPos = point3 (newPosX) (newPosY) (newPosZ)
-							at time (k) bonesPositionEnabled[i].position = RTWToMaxVector (tmpPos) isCollada
+							tmpPos = point3 (originalPosX + newPosX) (originalPosY + newPosY) calcPosZ	
 						)
-						posCounter = posCounter + 1
-						boneIndex = boneIndex + 1
+						else
+						(
+							tmpPos = point3 -calcPosX (originalPosY + newPosY) -calcPosZ
+						)
+						--print tmpPos
+						at time (k) bonesPositionEnabled[i].position = RTWCas_RTWToMaxVector (tmpPos) isCollada
 					)
+					
+					-- All other bones seems to be absolute offset from the parent
+					if(i != 1) then
+					(
+						local tmpPos = point3 (newPosX) (newPosY) (newPosZ)
+						at time (k) bonesPositionEnabled[i].position = RTWCas_RTWToMaxVector (tmpPos) isCollada
+					)
+					posCounter = posCounter + 1
+					boneIndex = boneIndex + 1
 				)
 			)
 			
@@ -793,8 +817,8 @@ utility RTWCasTools "RTW Cas Tools"
 	
 	group "Export"
 	(		
-		spinner startFrame "Start Frame:" range:(GetStartFrame()) type:#integer tooltip:"Set the start frame for animation to export" align:#center width:75 scale:1
-		spinner endFrame "End Frame:" range:(GetEndFrame()) type:#integer tooltip:"Set the end frame for animation to export" align:#center width:75 scale:1
+		spinner startFrame "Start Frame:" range:(RTWCas_GetStartFrame()) type:#integer tooltip:"Set the start frame for animation to export" align:#center width:75 scale:1
+		spinner endFrame "End Frame:" range:(RTWCas_GetEndFrame()) type:#integer tooltip:"Set the end frame for animation to export" align:#center width:75 scale:1
 		button syncFrames "Sync" width:30 height:40 offset:[57,-43] tooltip:"Sync the spinners with active scene animation range"
 		checkbox writeLogCheckbox "Create export logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .exportlog.txt file at the exported animation's location"
 		button exportAnimation "Export Animation" width:130 height:30 tooltip:"Export .CAS Animation"
@@ -802,24 +826,24 @@ utility RTWCasTools "RTW Cas Tools"
 	
 	on syncFrames pressed do
 	(
-		startFrame.range = GetStartFrame()
-		endFrame.range = GetEndFrame()
+		startFrame.range = RTWCas_GetStartFrame()
+		endFrame.range = RTWCas_GetEndFrame()
 	)
 	
 	on exportAnimation pressed do
-	(
+	(		
 		-- Check if Armature is present, thus rootbone
-		local armature = GetRootNode()
+		local armature = RTWCas_GetRootNode()
 		if(armature == undefined) then
 		(
 			messageBox "There is no root node in this scene!" title:"Error!"
 			return null
 		)
-		local isCollada = SceneIsCollada()
+		local isCollada = RTWCas_SceneIsCollada()
 		
 		-- Set parental offset to the bone properties
 		-- collect all bones but Armature
-		local boneList = GetBones()
+		local boneList = RTWCas_GetBones()
 		if(boneList == undefined or boneList.count == 0) then
 		(
 			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
@@ -828,11 +852,19 @@ utility RTWCasTools "RTW Cas Tools"
 		
 		if((animationRange.start > startFrame.value as integer) or (animationRange.end < endFrame.value)) then
 		(
-			messageBox "You need to Sync the animation frame start and end first!" title:"Error!"
-			return null
+			if(animImportFrameChanged == true) then
+			(
+				startFrame.range = RTWCas_GetStartFrame()
+				endFrame.range = RTWCas_GetEndFrame()
+				animImportFrameChanged = false
+			) else
+			(
+				messageBox "You need to Sync the animation frame start and end first!" title:"Error!"
+				return null
+			)
 		)
 		
-		local firstBoneTempChecker = GetBoneUserParentProperty boneList[1] -- HACK, simply gives warning if Grasp/Release tool was not used (or InitialPos not set in bone properties)
+		local firstBoneTempChecker = RTWCas_GetBoneUserParentProperty boneList[1] -- HACK, simply gives warning if Grasp/Release tool was not used (or InitialPos not set in bone properties)
 		
 		local numFrames = 1 + (endFrame.value - startFrame.value)
 		if(mod numFrames 2 == 0) then
@@ -850,8 +882,8 @@ utility RTWCasTools "RTW Cas Tools"
 			return null
 		)
 		
-		LogText("Starting Animation Export...")
-		LogText("Writing animation to file: " + (getFilenameFile exportFileName))
+		RTWCas_LogText("Starting Animation Export...")
+		RTWCas_LogText("Writing animation to file: " + (getFilenameFile exportFileName))
 		
 		local logFileName = (getFilenameFile exportFileName) + ".exportlog.txt"
 		local logFilePath = (getFilenamePath exportFileName)
@@ -863,7 +895,7 @@ utility RTWCasTools "RTW Cas Tools"
 		(
 			logFile = openFile logFileExport mode:"wt"
 			format " # -------------------------\tAnimation {%} Exported using [RTW Cas Tool] for 3ds Max by Sirrianus Dagovax\t------------------------- #\n\n" (getFilenameFile exportFileName) to:logFile
-			LogText("Check the log file for details: " + (logFileExport as string))
+			RTWCas_LogText("Check the log file for details: " + (logFileExport as string))
 		)
 			
 		local casFile = fopen exportFileName "wb"
@@ -873,23 +905,23 @@ utility RTWCasTools "RTW Cas Tools"
 			frameRate = 20 -- Set the framerate to 20
 				
 			local numBones = boneList.count		
-			local numBonesWithPosition = GetNumBonesWithPosition boneList frameStart frameEnd
+			local numBonesWithPosition = RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd
 			
 			-- Write first 3 entries
 			WriteShort casFile numframes
 			if(writeLog == true) then
 			(
-				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nframe \t = number of frames as two byte int\t\t%\n" numFrames (GetPointerPosition casFile) to:logFile
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nframe \t = number of frames as two byte int\t\t%\n" numFrames (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			WriteShort casFile numBones
 			if(writeLog == true) then
 			(
-				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nqbones \t = number of bones as two byte int\t\t%\n" numBones (GetPointerPosition casFile) to:logFile
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.nqbones \t = number of bones as two byte int\t\t%\n" numBones (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			WriteByte casFile numBonesWithPosition
 			if(writeLog == true) then
 			(
-				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.npbones \t = number of bones as single byte\t\t%\n" numBonesWithPosition (GetPointerPosition casFile) to:logFile
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.npbones \t = number of bones as single byte\t\t%\n" numBonesWithPosition (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 
 			-- Write rotation quaternian per frame
@@ -899,10 +931,10 @@ utility RTWCasTools "RTW Cas Tools"
 				rotCounter += 1
 				for i=1 to numBones do in coordsys boneList[i].parent
 				(
-					local frameRotX = RoundFloat (at time k -boneList[i][3][2].rotation.x) 5
-					local frameRotZ = RoundFloat(at time k -boneList[i][3][2].rotation.z) 5
-					local frameRotY = RoundFloat(at time k -boneList[i][3][2].rotation.y) 5
-					local frameRotW = RoundFloat(at time k boneList[i][3][2].rotation.w) 5
+					local frameRotX = RTWCas_RoundFloat (at time k -boneList[i][3][2].rotation.x) 5
+					local frameRotZ = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.z) 5
+					local frameRotY = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.y) 5
+					local frameRotW = RTWCas_RoundFloat(at time k boneList[i][3][2].rotation.w) 5
 					
 					if(isCollada == false) then
 					(
@@ -920,20 +952,20 @@ utility RTWCasTools "RTW Cas Tools"
 					-- write values to the log
 					if(writeLog == true) then
 					(
-						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue frameRotX 5) (FormatFloatValue frameRotZ 5) (FormatFloatValue frameRotY 5) (FormatFloatValue frameRotW 5) (rotCounter-1) (i-1) to:logFile
+						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (RTWCas_FormatFloatValue frameRotX 5) (RTWCas_FormatFloatValue frameRotZ 5) (RTWCas_FormatFloatValue frameRotY 5) (RTWCas_FormatFloatValue frameRotW 5) (rotCounter-1) (i-1) to:logFile
 					)
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End quats   ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End quats   ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Write bone positioning
 			local bonesWithPosition = #()
 			for i=1 to numBones do
 			(
-				if ((BoneHasPositionController boneList[i] frameStart frameEnd) == true) then
+				if ((RTWCas_BoneHasPositionController boneList[i] frameStart frameEnd) == true) then
 				(
 					append bonesWithPosition boneList[i]
 				)
@@ -953,7 +985,7 @@ utility RTWCasTools "RTW Cas Tools"
 					-- We do something different for the root bone (relative stuff)
 					if(i == 1) then
 					(
-						local oldPos = GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
+						local oldPos = RTWCas_GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
 						local originalPosX = oldPos[1]
 						local originalPosY = oldPos[3] -- Y in max is Z in RTW
 						local originalPosZ = (at time (k-1) bonesWithPosition[i].position)[2] 
@@ -977,35 +1009,35 @@ utility RTWCasTools "RTW Cas Tools"
 						diffPos.z = diffPos.z * -1
 					)
 					
-					WriteVector casFile diffPos
+					RTWCas_WriteVector casFile diffPos
 					
 					-- write values to the log
 					if(writeLog == true) then
 					(
-						format "\t\t%\t\t%\t\t%\t\t# position xyz(bone idx refer to bottom of file) frame =\t%\t\tbone index = \t\t%\n" (FormatFloatValue diffPos.x 5) (FormatFloatValue diffPos.y 5) (FormatFloatValue diffPos.z 5)  (frameCounter-1) (i-1) to:logFile
+						format "\t\t%\t\t%\t\t%\t\t# position xyz(bone idx refer to bottom of file) frame =\t%\t\tbone index = \t\t%\n" (RTWCas_FormatFloatValue diffPos.x 5) (RTWCas_FormatFloatValue diffPos.y 5) (RTWCas_FormatFloatValue diffPos.z 5)  (frameCounter-1) (i-1) to:logFile
 					)
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End frame pos   ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End frame pos   ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Doubled xyz incements
 			local doubleCounter = 0
 			for i=frameStart to ((frameEnd-1)) by 2 do
 			(
-				local transit = MaxToRTWvector( (at time (i+2) in coordsys world boneList[1].pos)  - (at time i in coordsys world boneList[1].pos) ) isCollada
-				WriteVector casFile transit
+				local transit = RTWCas_MaxToRTWvector( (at time (i+2) in coordsys world boneList[1].pos)  - (at time i in coordsys world boneList[1].pos) ) isCollada
+				RTWCas_WriteVector casFile transit
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t%\t\t%\t\t# doubled xyz increments\t\t\t\t%\n" (FormatFloatValue transit.x 5) (FormatFloatValue transit.y 5) (FormatFloatValue transit.z 5)  doubleCounter to:logFile
+					format "\t\t%\t\t%\t\t%\t\t# doubled xyz increments\t\t\t\t%\n" (RTWCas_FormatFloatValue transit.x 5) (RTWCas_FormatFloatValue transit.y 5) (RTWCas_FormatFloatValue transit.z 5)  doubleCounter to:logFile
 				)
 				doubleCounter = doubleCounter + 1
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End doubled xyz increments  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End doubled xyz increments  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Doubled distance vals
@@ -1025,34 +1057,34 @@ utility RTWCasTools "RTW Cas Tools"
 				WriteFloat casFile doubleDistance
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
+					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
 				)
 				doubleDistanceCounter += 1
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Write control bone position
 			--print("Adding control bone position to root bone " + boneList[1].name)
-			local oldPos = GetBoneUserParentProperty boneList[1]
-			local oldRootPos = MaxToRTWVector(oldPos) isCollada
+			local oldPos = RTWCas_GetBoneUserParentProperty boneList[1]
+			local oldRootPos = RTWCas_MaxToRTWVector(oldPos) isCollada
 			local controlPosCounter = 0
 			for k=frameStart to frameEnd do
 			(
 				controlPosCounter += 1
-				local newRootPos = MaxToRTWVector(at time k in coordsys parent boneList[1].pos) isCollada
+				local newRootPos = RTWCas_MaxToRTWVector(at time k in coordsys parent boneList[1].pos) isCollada
 				local posDifference = newRootPos - oldRootPos
-				WriteVector casFile posDifference
+				RTWCas_WriteVector casFile posDifference
 				if(writeLog == true) then
 				(
-					format "\t\t%\t\t%\t\t%\t\t# control bone position xyz at frame =\t%\n" (FormatFloatValue posDifference.x 5) (FormatFloatValue posDifference.y 5) (FormatFloatValue posDifference.z 5)  (controlPosCounter-1) to:logFile
+					format "\t\t%\t\t%\t\t%\t\t# control bone position xyz at frame =\t%\n" (RTWCas_FormatFloatValue posDifference.x 5) (RTWCas_FormatFloatValue posDifference.y 5) (RTWCas_FormatFloatValue posDifference.z 5)  (controlPosCounter-1) to:logFile
 				)
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End control bone position  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End control bone position  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Write the 8 floats about anim stuff
@@ -1116,8 +1148,8 @@ utility RTWCasTools "RTW Cas Tools"
 			
 			if(writeLog == true) then
 			(
-				format "\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t#\t time, xzvecdist, xdiff, ydiff, zdiff, avdistseconds, then tenths, then after 21 frames, 0\n" (FormatFloatValue (wTime as Float) 5) (FormatFloatValue (wZxvecdist as Float)  5) (FormatFloatValue (wXDiff as Float)  5) (FormatFloatValue (wYDiff as Float)  5) (FormatFloatValue (wZDiff as Float)  5) (FormatFloatValue (wAvDistSeconds as Float)  5) (FormatFloatValue (wTenths as Float)  5) (FormatFloatValue (wAvgFrames as Float)  5)to:logFile
-				format " # -------------------------  End positions last bit almost movements  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format "\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t%\t\t#\t time, xzvecdist, xdiff, ydiff, zdiff, avdistseconds, then tenths, then after 21 frames, 0\n" (RTWCas_FormatFloatValue (wTime as Float) 5) (RTWCas_FormatFloatValue (wZxvecdist as Float)  5) (RTWCas_FormatFloatValue (wXDiff as Float)  5) (RTWCas_FormatFloatValue (wYDiff as Float)  5) (RTWCas_FormatFloatValue (wZDiff as Float)  5) (RTWCas_FormatFloatValue (wAvDistSeconds as Float)  5) (RTWCas_FormatFloatValue (wTenths as Float)  5) (RTWCas_FormatFloatValue (wAvgFrames as Float)  5)to:logFile
+				format " # -------------------------  End positions last bit almost movements  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			-- Write bit bone positions
@@ -1126,7 +1158,7 @@ utility RTWCasTools "RTW Cas Tools"
 			(
 				if(boneList[b+1] != undefined) then
 				(
-					if ((BoneHasPositionController boneList[b+1] frameStart frameEnd) == true) then
+					if ((RTWCas_BoneHasPositionController boneList[b+1] frameStart frameEnd) == true) then
 					(
 						append bitBonePositions 1
 					) else
@@ -1151,12 +1183,12 @@ utility RTWCasTools "RTW Cas Tools"
 					outPutString = outPutString + bitPos as string
 					if(p == 7 or p == 15 or p == 23 or p == 31 or p == 39 or p == 47 or p == 55 or p == 63) then
 					(
-						local bitString = ReverseString(outPutString)
-						local resultInt = (BinaryToInt(bitString))
+						local bitString = RTWCas_ReverseString(outPutString)
+						local resultInt = (RTWCas_BinaryToInt(bitString))
 						WriteByte casFile resultInt #unsigned
 						if (writeLog == true) then
 						(
-							format "%  %  %  %  %  %  %  %\t\t\t\t\t\t\t\t\t # bit bone positions (%-% switched for ease of reading) \t\t%\n" bitArr[1] bitArr[2] bitArr[3] bitArr[4] bitArr[5] bitArr[6] bitArr[7] bitArr[8] minCounter p (GetPointerPosition casFile) to:logFile
+							format "%  %  %  %  %  %  %  %\t\t\t\t\t\t\t\t\t # bit bone positions (%-% switched for ease of reading) \t\t%\n" bitArr[1] bitArr[2] bitArr[3] bitArr[4] bitArr[5] bitArr[6] bitArr[7] bitArr[8] minCounter p (RTWCas_GetPointerPosition casFile) to:logFile
 						)
 						bitArr = #()
 						outPutString = ""
@@ -1170,7 +1202,7 @@ utility RTWCasTools "RTW Cas Tools"
 			)
 			if(writeLog == true) then
 			(
-				format " # -------------------------  End bone position enablers (end of animation write)  ----------------------------  \t\t%\n" (GetPointerPosition casFile) to:logFile
+				format " # -------------------------  End bone position enablers (end of animation write)  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
 			if(writeLog == true) then

@@ -17,10 +17,10 @@
 -- 			Revision history:			 --
 --										 --
 -- v1.0 -- current  					 --
---										 --
+-- v1.1 -- Fixed errors due to scripts having duplicate functions   --
 -------------------------------------------
 
-function GetBonePropsByName inputBone skelType =
+function IWTECoordinateExporter_GetBonePropsByName inputBone skelType =
 (
 	local resultArr = #()
 	local frontValue = 0
@@ -810,7 +810,7 @@ function GetBonePropsByName inputBone skelType =
 	return resultArr
 )
 
-function GetHierarchy inputBones skelType =
+function IWTECoordinateExporter_GetHierarchy inputBones skelType =
 (
 	local exportArr = #() -- format [name, game index, bone idx, bone special props]
 	local counter = 0
@@ -823,7 +823,7 @@ function GetHierarchy inputBones skelType =
 			append entry i.name
 			append entry -1
 			append entry counter
-			append entry (GetBonePropsByName i skelType)
+			append entry (IWTECoordinateExporter_GetBonePropsByName i skelType)
 			append exportArr entry
 		) else
 		(
@@ -837,7 +837,7 @@ function GetHierarchy inputBones skelType =
 					append entry i.name
 					append entry (p[3])
 					append entry counter
-					append entry (GetBonePropsByName i skelType)
+					append entry (IWTECoordinateExporter_GetBonePropsByName i skelType)
 					append exportArr entry
 				)
 			)
@@ -847,7 +847,7 @@ function GetHierarchy inputBones skelType =
 	return exportArr
 )
 
-function FormatSkeletonEntry val zeroes noPlus = 
+function IWTECoordinateExporter_FormatIWTESkeletonEntry val zeroes noPlus = 
 (
 	tempzeros = "000000000000"
 	if (val > -0.0001) and (val < 0.0001) then
@@ -882,7 +882,7 @@ utility IWTECoordinateExporter "IWTE Bone Exporter"
 	(
 		label titleLabel1 "Bone Coordinate Exporter"
 		label extraLabel "for RTW RR (IWTE)"
-		label titleLabel2 "v2.0" color:(color 0 20 80)
+		label titleLabel2 "v1.1" color:(color 0 20 80)
 		label empt " "
 		label titleLabel3 "Use this tool to export bone" color:(color 0 180 50)
 		label extraLabel5 "coordinates for" color:(color 0 180 50)
@@ -935,14 +935,14 @@ utility IWTECoordinateExporter "IWTE Bone Exporter"
 				on continueButton pressed do
 				(
 					try (destroydialog skelSelectorDialog) catch()
-					local boneHierarchyArray = GetHierarchy dummies list.selected
+					local boneHierarchyArray = IWTECoordinateExporter_GetHierarchy dummies list.selected
 					--print boneHierarchyArray
 					output = newScript()
 					
 					local scaleValue = skelScale.value
 					local lerpFloatValue = lerpFloat.value
-					scaleValue = FormatSkeletonEntry scaleValue 4 true
-					lerpFloatValue = FormatSkeletonEntry lerpFloatValue 4 true
+					scaleValue = IWTECoordinateExporter_FormatIWTESkeletonEntry scaleValue 4 true
+					lerpFloatValue = IWTECoordinateExporter_FormatIWTESkeletonEntry lerpFloatValue 4 true
 					
 					format "  %\t\t\t\t\t\t\t\t\t\t\t\t\t# skeleton scale\n%\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of bones\n%\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t# bone count 2\n  %\t\t\t\t\t\t\t\t\t\t\t\t\t# lerp float\n" \
 					scaleValue boneHierarchyArray.count 0 lerpFloatValue to:output					
@@ -997,9 +997,9 @@ utility IWTECoordinateExporter "IWTE Bone Exporter"
 						_x = _x * -1
 						_y = _y * -1
 						
-						_x = FormatSkeletonEntry _x 4 true
-						_y = FormatSkeletonEntry _y 4 true
-						_z = FormatSkeletonEntry _z 4 true
+						_x = IWTECoordinateExporter_FormatIWTESkeletonEntry _x 4 true
+						_y = IWTECoordinateExporter_FormatIWTESkeletonEntry _y 4 true
+						_z = IWTECoordinateExporter_FormatIWTESkeletonEntry _z 4 true
 						
 						local boneHierarchyString = boneHierarchy as string
 						if(boneHierarchyString.count == 1) then

@@ -17,10 +17,10 @@
 -- 			Revision history:			 --
 --										 --
 -- v1.0 -- intial version 				 --
---										 --
+-- v1.1 -- Fixed errors due to scripts having duplicate functions   --
 -------------------------------------------
 
-function RoundFloat val dp = --rounds a float to a set number of decimal places
+function RTWTools_RoundFloat val dp = --rounds a float to a set number of decimal places
 (
 	a = val * (10^dp)
 	b = a as integer
@@ -28,7 +28,7 @@ function RoundFloat val dp = --rounds a float to a set number of decimal places
 	return a
 )
 
-function SortByVertex arr = -- sort object array by vertex count
+function RTWTools_SortByVertex arr = -- sort object array by vertex count
 (		
 	local sortedArr = #()
 	while arr.count > 0 do
@@ -58,7 +58,7 @@ function SortByVertex arr = -- sort object array by vertex count
 	return sortedArr
 )	
 
-function FormatSkeletonEntry val zeroes = 
+function RTWTools_FormatSkeletonEntry val zeroes = 
 (
 	tempzeros = "000000000000"
 	if (val > -0.0001) and (val < 0.0001) then
@@ -81,7 +81,7 @@ function FormatSkeletonEntry val zeroes =
 	return val
 )
 
-function CalculateOffset refObject difObject isCollada = 
+function RTWTools_CalculateOffset refObject difObject isCollada = 
 (
 	resultArr = #()
 	if(refObject == undefined or difObject == undefined) then
@@ -111,13 +111,66 @@ function CalculateOffset refObject difObject isCollada =
 		offsetY = (offsetY * -1)
 	)
 	
-	resultX = RoundFloat offsetX 3
-	resultY = RoundFloat offsetY 3
-	resultZ = RoundFloat offsetZ 3
+	resultX = RTWTools_RoundFloat offsetX 3
+	resultY = RTWTools_RoundFloat offsetY 3
+	resultZ = RTWTools_RoundFloat offsetZ 3
 	append resultArr resultX
 	append resultArr resultY
 	append resultArr resultZ
 	return resultArr
+)
+
+-- Get the root NODE (not bone!), either Armature or Scene Root depending on imported file
+function RTWTools_GetRootNode =
+(
+	local armature = getNodeByName "Armature" exact:true
+	if (armature == undefined) then 
+	(			
+		armature = getNodeByName "Scene_Root" exact:true
+		if(armature == undefined) then
+		(
+			armature = getNodeByName "Scene Root" exact:true
+			if(armature == undefined) then
+			(
+				return null
+			)
+		)
+	)
+	return armature
+)
+
+-- Return a list of bones (without Armature/Scene Root)
+function RTWTools_GetBones =
+(
+	local armature = RTWTools_GetRootNode()
+	if(armature != undefined) then
+	(
+		local dummies = for t in objects where (classOf t == Dummy and t.name != armature.name and t.parent != undefined) collect t
+		local pointers = for t in objects where (classOf t == Point and t.name != armature.name and t.parent != undefined) collect t
+		if (dummies == undefined or dummies.count == 0) then
+		(
+			if(pointers == undefined or pointers.count == 0) then
+			(
+				return null
+			)
+			return pointers
+		)
+		return dummies	
+	)
+)
+
+-- Checks whether the scene is Collada format or OG
+function RTWTools_SceneIsCollada =
+(
+	local armature = RTWTools_GetRootNode()
+	if(armature != undefined) then
+	(
+		if(armature.name == "Scene Root" or armature.name == "Scene_Root") then
+		(
+			return false
+		)
+	)
+	return true
 )
 
 utility RTWTools "RTW Tools"
@@ -125,7 +178,7 @@ utility RTWTools "RTW Tools"
 	group "Info:"
 	(
 		label titleLabel1 "RTW Tools"
-		label titleLabel2 "v1.0" color:(color 0 180 80)
+		label titleLabel2 "v1.1" color:(color 0 180 80)
 		label empt " "
 		label titleLabel3 "Various helpfull" color:(color 0 180 50)
 		label extraLabel2 "tools for RTW" color:(color 0 180 50)
@@ -198,7 +251,9 @@ utility RTWTools "RTW Tools"
 			-- bone found, lets roll
 			if(canContinue) then
 			(
-				offSetArr = CalculateOffset boneEPlatform selected[1] isCollada
+				print selected[1]
+				print boneEPlatform
+				offSetArr = RTWTools_CalculateOffset boneEPlatform selected[1] isCollada
 				_x = offSetArr[1]
 				_y = offSetArr[2]
 				_z = offSetArr[3]
@@ -243,8 +298,8 @@ utility RTWTools "RTW Tools"
 			
 			if(canContinue) then
 			(
-				outRadius = RoundFloat (theEllipse.length / 2) 2
-				outX = RoundFloat (theEllipse.width / 2) 2
+				outRadius = RTWTools_RoundFloat (theEllipse.length / 2) 2
+				outX = RTWTools_RoundFloat (theEllipse.width / 2) 2
 				
 				print ("radius = " + (outRadius as string))
 				print ("x_radius = " + (outX as string))
@@ -281,13 +336,15 @@ utility RTWTools "RTW Tools"
 					)
 				)
 			)
-			result = RoundFloat (highestPoint as float) 2
+			result = RTWTools_RoundFloat (highestPoint as float) 2
 			print ("The heighest vertex Z position = " + (result as string))
 			output = newScript()
 			format "height\t\t\t\t%\n" result to:output
 		)
 	)
 	
+	global engineAnimationRange = #()
+	global engineAnimationFrames = #()
 	group "Engines:"
 	(
 		label engineSizeLabel1 "Calculate engine" 
@@ -300,9 +357,111 @@ utility RTWTools "RTW Tools"
 		label projPosLabel1 "Get the relative" 
 		label projPosLabel2 "projectile offset" 
 		button getProjOffset "Get Projectile Offset" width:130 height:30
+		groupBox enginesLine3 width: 130 height:2
+		label engineAnimCopy1 "Copy and Paste animation"
+		label engineAnimCopy2 "to another engine"
+		button engineCopyAnim "Copy Animation" width:130 height:30
+		button enginePasteAnim "Paste Animation" width:130 height:30
 	)
 	
-		-- Calculate Engine properties using a Box object
+	-- Copy engine animation
+	on engineCopyAnim pressed do
+	(
+		-- collect all bones but Armature
+		local boneList = RTWTools_GetBones()
+		if(boneList == undefined or boneList.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
+			return null
+		)
+		if(frameRate != 20) then
+		(
+			messageBox "Please change the frame rate to 20 to prevent issues!" title:"Warning!"
+			return null
+		)
+		engineAnimationRange = #()
+		local numFrames = 1 + (animationRange.end - animationRange.start)
+		append engineAnimationRange numFrames
+		append engineAnimationRange boneList.count
+		
+		engineAnimationFrames = #()
+		for k=1 to numFrames do in coordsys parent
+		(
+			local frameArray = #()
+			for b=1 to boneList.count do
+			(
+				local posArray = #()
+				local boneRot = at time k boneList[b].rotation
+				local bonePos = at time k boneList[b].position
+				append posArray boneRot
+				append posArray bonePos
+				append frameArray posArray
+			)
+			append engineAnimationFrames frameArray
+		)
+	)
+	
+	-- Paste engine animation
+	on enginePasteAnim pressed do
+	(
+		local boneList = RTWTools_GetBones()
+		if(boneList == undefined or boneList.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
+			return null
+		)
+		if(engineAnimationRange == undefined or engineAnimationRange.count != 2) then
+		(
+			messageBox "You need to Copy an(other) engine animation first!" title:"Error!"
+			return null
+		)
+		local numFrames = engineAnimationRange[1]
+		local numBones = engineAnimationRange[2]
+		if(numBones != boneList.count) then
+		(
+			local boneDifferMessage = ("Number of bones in copied animation {" + (numBones as string) + "} differs from number of bones in this scene {" + (boneList.count as string) + "}!\n\nContinue anyway?")
+			if ((queryBox boneDifferMessage beep:true) == false) then
+			(
+				messageBox "Animation copy failed!" title:"Error!"
+				return null
+			)
+		)
+		if(engineAnimationFrames == undefined or engineAnimationFrames.count == 0) then
+		(
+			messageBox "No anim data copied! You need to Copy an(other) engine animation first!" title:"Error!"
+			return null
+		)
+		frameRate = 20 -- Set the framerate to 20
+		animationRange = interval 1 numFrames
+		
+		local saveBonePos = #()
+		for b=1 to boneList.count do
+		(
+			local pos = at time 1 boneList[b].position
+			append saveBonePos pos
+		)
+		
+		for k=1 to numFrames do animate on coordsys parent
+		(
+			local frameArray = engineAnimationFrames[k]
+			for b=1 to numBones do
+			(
+				local posArray = frameArray[b]
+				at time k boneList[b].rotation = posArray[1]
+				at time k boneList[b].position = posArray[2]
+			)
+		)
+		
+		if(saveBonePos != undefined and saveBonePos.count == boneList.count) then
+		(
+			for b=1 to boneList.count do
+			(
+				at time 1 boneList[b].position = saveBonePos[b]
+			)
+		)
+	)
+	
+	-- Calculate Engine properties using a Box object
 	on calculateEngineSize pressed do
 	(
 		canContinue = true
@@ -332,10 +491,10 @@ utility RTWTools "RTW Tools"
 			
 			if(canContinue) then
 			(
-				outLength = RoundFloat theBox.length 2
-				outWidth = RoundFloat theBox.width 2
-				outHeight = RoundFloat theBox.height 2
-				outRadius = RoundFloat (theBox.pos.y * -1) 2
+				outLength = RTWTools_RoundFloat theBox.length 2
+				outWidth = RTWTools_RoundFloat theBox.width 2
+				outHeight = RTWTools_RoundFloat theBox.height 2
+				outRadius = RTWTools_RoundFloat (theBox.width / 2) 2
 				
 				print ("engine_radius = " + (outRadius as string))
 				print ("engine_length = " + (outLength as string))
@@ -375,8 +534,8 @@ utility RTWTools "RTW Tools"
 					)
 					if(canContinue) then
 					(
-						outY = RoundFloat (theRectangle.length / 2) 2
-						outX = RoundFloat (theRectangle.width / 2) 2
+						outY = RTWTools_RoundFloat (theRectangle.length / 2) 2
+						outX = RTWTools_RoundFloat (theRectangle.width / 2) 2
 					)
 				)
 			)
@@ -400,8 +559,8 @@ utility RTWTools "RTW Tools"
 					)
 					if(canContinue) then
 					(
-						outY = RoundFloat (theEllipse.length / 2) 2
-						outX = RoundFloat (theEllipse.width / 2) 2
+						outY = RTWTools_RoundFloat (theEllipse.length / 2) 2
+						outX = RTWTools_RoundFloat (theEllipse.width / 2) 2
 					)
 				)
 			)
@@ -425,8 +584,8 @@ utility RTWTools "RTW Tools"
 					)
 					if(canContinue) then
 					(
-						outY = RoundFloat (theEllipse.length / 2) 2
-						outX = RoundFloat (theEllipse.width / 2) 2
+						outY = RTWTools_RoundFloat (theEllipse.length / 2) 2
+						outX = RTWTools_RoundFloat (theEllipse.width / 2) 2
 					)
 				)
 			)
@@ -506,10 +665,10 @@ utility RTWTools "RTW Tools"
 					if(canContinue) then
 					(
 						print ("User selected bone: " + selectedBone.name)
-						offSetArr = CalculateOffset selectedBone selectedObj isCollada
-						_x = FormatSkeletonEntry (offSetArr[1]) 4
-						_y = FormatSkeletonEntry (offSetArr[2]) 4
-						_z = FormatSkeletonEntry (offSetArr[3]) 4
+						offSetArr = RTWTools_CalculateOffset selectedBone selectedObj isCollada
+						_x = RTWTools_FormatSkeletonEntry (offSetArr[1]) 4
+						_y = RTWTools_FormatSkeletonEntry (offSetArr[2]) 4
+						_z = RTWTools_FormatSkeletonEntry (offSetArr[3]) 4
 						print ("projectile offset x,z,y = " + _x as string + " | " + _z as string + " | " + _y as string)
 						output = newScript()
 						format "%  %  %\n" _x _z _y to:output	
@@ -526,6 +685,88 @@ utility RTWTools "RTW Tools"
 		label groupLodsLabel2 "intersect ordered by"
 		label groupLodsLabel3 "vertex count" 
 		button groupLods "Group LOD's" width:130 height:30
+		label skelPosLabel1 "Get the relative" 
+		label skelPosLabel2 "projectile offset" 
+		button getSkelProjOffset "Skeleton Projectile Offset" width:130 height:30
+	)
+	
+	-- Get the proejctile relative offset used in a skeleton (IWTE format)
+	on getSkelProjOffset pressed do
+	(
+		canContinue = true
+		global isCollada = false
+		
+		pointers = for t in objects where (classOf t == Point) collect t
+		dummies = for t in objects where (classOf t == Dummy) collect t
+		global boneArr = #()
+		if (pointers.count == 0 and dummies.count == 0) then
+		(
+			canContinue = false
+			messageBox "There are no bones in this scene!" title:"Error!"
+		)
+		
+		if(pointers.count > 0) then
+		(
+			isCollada = false
+			boneArr = pointers
+		)
+		if(dummies.count > 0) then
+		(
+			isCollada = true
+			boneArr = dummies
+		)
+		
+		selected = for t in selection collect t
+		if(canContinue and selected.count == 0) then
+		(
+			canContinue = false
+			messageBox "You need to select an object or bone to calculate offset with!" title:"Error!"
+		)
+		if(canContinue and selected.count > 1) then
+		(
+			canContinue = false
+			messageBox "You can only select one object or bone!" title:"Error!"
+		)
+		
+		if(canContinue) then
+		(
+			global selectedObj = selected[1]
+			global boneNameArr = for i in boneArr collect i.name
+			
+			rollout dialog_projSkelOffset "Calculate Skeleton Projectile Offset"
+			(
+				label projskelPosLabelDialog1 "Select the Bone you want to calculate the" 
+				label projskelPosLabelDialog2 "the skeleton projectile's offset with" 
+				dropdownlist projSkelPosBoneList "" align:#center items:boneNameArr
+				button projSkelOffsetContinue "Continue" width:130 height:30
+				
+				-- Continue button pressed
+				on projSkelOffsetContinue pressed do
+				(
+					local canContinue = true
+					local selectedBone = (for b in boneArr where (b.name == projSkelPosBoneList.selected) collect b)[1]
+					try (destroydialog dialog_projSkelOffset) catch()
+					if(selectedBone == undefined) then
+					(
+						canContinue = false
+						messageBox "The selected bone is invalid" title:"Error!"
+					)
+					if(canContinue) then
+					(
+						print ("User selected bone: " + selectedBone.name)
+						local offSetArr = RTWTools_CalculateOffset selectedBone selectedObj isCollada
+						_x = RTWTools_FormatSkeletonEntry (offSetArr[1]) 4
+						_y = RTWTools_FormatSkeletonEntry (offSetArr[2]) 4
+						_z = selectedObj.pos.z + (selectedObj.pos.z / 2)
+						_z = RTWTools_FormatSkeletonEntry _z 4
+						print ("projectile offset x,z,y = " + _x as string + " | " + _z as string + " | " + _y as string)
+						output = newScript()
+						format "%  %  %\n" _x _z _y to:output	
+					)
+				)
+			)
+			createDialog dialog_projSkelOffset 210 100
+		)
 	)
 	
 	-- Check all objects and check if they intersect with each other, defining multiple LODs
@@ -562,9 +803,9 @@ utility RTWTools "RTW Tools"
 					
 					oPos = firstMesh.center
 					
-					resultX = RoundFloat oPos.x 1
-					resultY = RoundFloat oPos.y 1
-					resultZ = RoundFloat oPos.z 1
+					resultX = RTWTools_RoundFloat oPos.x 1
+					resultY = RTWTools_RoundFloat oPos.y 1
+					resultZ = RTWTools_RoundFloat oPos.z 1
 					append meshPoints resultX
 					append meshPoints resultY
 					append meshPoints resultZ
@@ -577,9 +818,9 @@ utility RTWTools "RTW Tools"
 						objCenter = allObjects[i].center
 						meshLocalPoints = #()
 						
-						meshX = RoundFloat objCenter.x 1
-						meshY = RoundFloat objCenter.y 1
-						meshZ = RoundFloat objCenter.z 1
+						meshX = RTWTools_RoundFloat objCenter.x 1
+						meshY = RTWTools_RoundFloat objCenter.y 1
+						meshZ = RTWTools_RoundFloat objCenter.z 1
 						append meshLocalPoints meshX
 						append meshLocalPoints meshY
 						append meshLocalPoints meshZ
@@ -595,7 +836,7 @@ utility RTWTools "RTW Tools"
 					--g = group localLodArr name:"SAMELOC"
 					
 					-- Sort by vertex count
-					sortedArr = SortByVertex localLodArr
+					sortedArr = RTWTools_SortByVertex localLodArr
 					for i = 1 to sortedArr.count do
 					(
 						-- Add LOD0
