@@ -19,6 +19,7 @@
 -- v1.0 -- intial version with animation				--
 -- v1.1 -- Added Grasp/Release; animation frames   --
 -- v1.2 -- Fixed errors due to scripts having duplicate functions   --
+-- v1.3 -- Fixed rotation quat issue and doubled distance values during export --
 ----------------------------------------------------------
 
 global useLog = true
@@ -169,85 +170,6 @@ function RTWCas_LogText logString =
 	)
 )
 
--- Check if input bone has valid position controller
-function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd =
-(
-	if(boneIdx == undefined) then
-	(
-		return false
-	)
-	local armature = RTWCas_GetRootNode()
-	if(armature == undefined) then
-	(
-		return false
-	)
-	if(boneIdx.parent.name == armature.name) then
-	(
-		return true -- Always add first bone
-	)
-	local intialPos = RTWCas_GetBoneUserParentProperty boneIdx
-	local forcePosition = getUserProp boneIdx "ForcePosition"
-	if (forcePosition != undefined) then
-	(
-		return true
-	)
-	if(intialPos != undefined) then
-	(
-		for k = frameStart to frameEnd do
-		(
-			local framePos = at time (k) in coordsys boneIdx.parent boneIdx.pos
-			local differenceX = RTWCas_FormatFloatValue (framePos.x - intialPos[1]) 1
-			local differenceY = RTWCas_FormatFloatValue (framePos.y - intialPos[2]) 1
-			local differenceZ = RTWCas_FormatFloatValue (framePos.z - intialPos[3]) 1
-			if(differenceX as string != " 0.0" or differenceY as string != " 0.0" or differenceZ as string != " 0.0") then
-			(
-				return true
-			)
-		)
-	)
-	for k=(frameStart+1) to frameEnd do
-	(
-		local previousPos = at time (k-1) in coordsys boneIdx.parent boneIdx.pos
-		local currentPos = at time (k) in coordsys boneIdx.parent boneIdx.pos
-		local differenceX = RTWCas_FormatFloatValue (currentPos.x - previousPos.x) 1
-		local differenceY = RTWCas_FormatFloatValue (currentPos.y - previousPos.y) 1
-		local differenceZ = RTWCas_FormatFloatValue (currentPos.z - previousPos.z) 1
-		if(differenceX as string != " 0.0" or differenceY as string != " 0.0" or differenceZ as string != " 0.0") then
-		(
-			return true
-		)
-	)
-	return false
-)
-
--- Return count of bones that have a valid position controller
-function RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd =
-(
-	if(boneList == undefined) then
-	(
-		return 1 -- we always need 1 bone.. Root bone has position
-	)
-	local counter = 0
-	for b in boneList do
-	(
-		if(counter == 0) then -- always add first bone!
-		(
-			counter += 1
-		) else
-		(
-			if ((RTWCas_BoneHasPositionController b frameStart frameEnd) == true) then
-			(
-				counter += 1
-			)	
-		)
-	)
-	if(counter == 0) then
-	(
-		return 1 -- we always need 1 bone.. Root bone has position
-	)
-	return counter
-)
-
 function RTWCas_GetPointerPosition inputFileStream =
 (
 	if(inputFileStream == undefined) then
@@ -331,6 +253,85 @@ function RTWCas_GetBoneUserParentProperty boner =
 	return at time 0 boner.pos
 )
 
+-- Check if input bone has valid position controller
+function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd =
+(
+	if(boneIdx == undefined) then
+	(
+		return false
+	)
+	local armature = RTWCas_GetRootNode()
+	if(armature == undefined) then
+	(
+		return false
+	)
+	if(boneIdx.parent.name == armature.name) then
+	(
+		return true -- Always add first bone
+	)
+	local initialPos = RTWCas_GetBoneUserParentProperty boneIdx
+	local forcePosition = getUserProp boneIdx "ForcePosition"
+	if (forcePosition != undefined) then
+	(
+		return true
+	)
+	if(initialPos != undefined) then
+	(
+		for k = frameStart to frameEnd do
+		(
+			local framePos = at time (k) in coordsys boneIdx.parent boneIdx.pos
+			local differenceX = RTWCas_FormatFloatValue (framePos.x - initialPos[1]) 1
+			local differenceY = RTWCas_FormatFloatValue (framePos.y - initialPos[2]) 1
+			local differenceZ = RTWCas_FormatFloatValue (framePos.z - initialPos[3]) 1
+			if(differenceX as string != " 0.0" or differenceY as string != " 0.0" or differenceZ as string != " 0.0") then
+			(
+				return true
+			)
+		)
+	)
+	for k=(frameStart+1) to frameEnd do
+	(
+		local previousPos = at time (k-1) in coordsys boneIdx.parent boneIdx.pos
+		local currentPos = at time (k) in coordsys boneIdx.parent boneIdx.pos
+		local differenceX = RTWCas_FormatFloatValue (currentPos.x - previousPos.x) 1
+		local differenceY = RTWCas_FormatFloatValue (currentPos.y - previousPos.y) 1
+		local differenceZ = RTWCas_FormatFloatValue (currentPos.z - previousPos.z) 1
+		if(differenceX as string != " 0.0" or differenceY as string != " 0.0" or differenceZ as string != " 0.0") then
+		(
+			return true
+		)
+	)
+	return false
+)
+
+-- Return count of bones that have a valid position controller
+function RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd =
+(
+	if(boneList == undefined) then
+	(
+		return 1 -- we always need 1 bone.. Root bone has position
+	)
+	local counter = 0
+	for b in boneList do
+	(
+		if(counter == 0) then -- always add first bone!
+		(
+			counter += 1
+		) else
+		(
+			if ((RTWCas_BoneHasPositionController b frameStart frameEnd) == true) then
+			(
+				counter += 1
+			)	
+		)
+	)
+	if(counter == 0) then
+	(
+		return 1 -- we always need 1 bone.. Root bone has position
+	)
+	return counter
+)
+
 -- Get starting frame animation selection
 function RTWCas_GetStartFrame =
 (
@@ -349,7 +350,7 @@ utility RTWCasTools "RTW Cas Tools"
 	group "Info:"
 	(
 		label titleLabel1 "RTW CAS Tools"
-		label titleLabel2 "v1.2" color:(color 0 20 80)
+		label titleLabel2 "v1.3" color:(color 0 20 80)
 		label empt " "
 		label titleLabel3 "Use this tool to import" color:(color 0 180 50)
 		label titleLabel4 "or export .CAS files." color:(color 0 180 50)
@@ -533,6 +534,10 @@ utility RTWCasTools "RTW Cas Tools"
 			animImportFrameChanged = true			
 			
 			-- Read rotation quaternian per frame
+			for b in boneList do
+			(
+				b.rotation.controller = TCB_Rotation()
+			)
 			local boneVecs = #()
 			for k = 1 to numFrames do
 			(
@@ -560,6 +565,10 @@ utility RTWCasTools "RTW Cas Tools"
 						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (RTWCas_FormatFloatValue frameRotX 5) (RTWCas_FormatFloatValue frameRotZ 5) (RTWCas_FormatFloatValue frameRotY 5) (RTWCas_FormatFloatValue frameRotW 5) (k-1) (i-1) to:logFile
 					)
 				)
+			)
+			for b in boneList do
+			(
+				b.rotation.controller = Euler_XYZ()
 			)
 			if(writeLog == true) then
 			(
@@ -924,14 +933,18 @@ utility RTWCasTools "RTW Cas Tools"
 				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.npbones \t = number of bones as single byte\t\t%\n" numBonesWithPosition (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 
-			-- Write rotation quaternian per frame
+			-- Write rotation quaternian per frame. First we need to set it to TCB_Rotation for each bone!
+			for b in boneList do
+			(
+				b.rotation.controller = TCB_Rotation()
+			)
 			local rotCounter = 0
 			for k=frameStart to frameEnd do
 			(
 				rotCounter += 1
 				for i=1 to numBones do in coordsys boneList[i].parent
 				(
-					local frameRotX = RTWCas_RoundFloat (at time k -boneList[i][3][2].rotation.x) 5
+					local frameRotX = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.x) 5
 					local frameRotZ = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.z) 5
 					local frameRotY = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.y) 5
 					local frameRotW = RTWCas_RoundFloat(at time k boneList[i][3][2].rotation.w) 5
@@ -955,6 +968,10 @@ utility RTWCasTools "RTW Cas Tools"
 						format "\t\t%\t\t%\t\t%\t\t%\t\t# rotation quaternian frame =\t%\t\tbone index = \t\t%\n" (RTWCas_FormatFloatValue frameRotX 5) (RTWCas_FormatFloatValue frameRotZ 5) (RTWCas_FormatFloatValue frameRotY 5) (RTWCas_FormatFloatValue frameRotW 5) (rotCounter-1) (i-1) to:logFile
 					)
 				)
+			)
+			for b in boneList do
+			(
+				b.rotation.controller = Euler_XYZ()
 			)
 			if(writeLog == true) then
 			(
@@ -1043,28 +1060,51 @@ utility RTWCasTools "RTW Cas Tools"
 			-- Doubled distance vals
 			local doubleDistanceCounter = 0
 			local ulim = ((numFrames-1)/2)
-			for k=(frameEnd - (ulim+1)) to frameStart by -1 do
+			
+			for k=frameEnd to frameStart by -2 do
 			(
-				local frameTest = k*2
-				local frameZ = (at time frameTest in coordsys world boneList[1].pos)[2]
-				local frameZA = (at time (frameTest-1) in coordsys world boneList[1].pos)[2]
-				local diffZ = frameZ - frameZA
-				local doubleDistance = (frameZ + (diffZ/2))
-				if(isCollada == false) then
+				if(k > 1) then
 				(
-					doubleDistance = doubleDistance * -1
+					local doubleDistance = (at time k in coordsys world boneList[1].pos)[2]
+					if(isCollada == false) then
+					(
+						doubleDistance = doubleDistance * -1
+					)
+					WriteFloat casFile doubleDistance
+					if(writeLog == true) then
+					(
+						format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
+					)
+					doubleDistanceCounter += 1
 				)
-				WriteFloat casFile doubleDistance
-				if(writeLog == true) then
-				(
-					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
-				)
-				doubleDistanceCounter += 1
 			)
 			if(writeLog == true) then
 			(
 				format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
+			
+			--for k=(frameEnd - (ulim+1)) to frameStart by -1 do
+			--(
+				--local frameTest = k*2
+				--local frameZ = (at time frameTest in coordsys world boneList[1].pos)[2]
+				--local frameZA = (at time (frameTest-1) in coordsys world boneList[1].pos)[2]
+				--local diffZ = frameZ - frameZA
+				--local doubleDistance = (frameZ + (diffZ/2))
+				--if(isCollada == false) then
+				--(
+					--doubleDistance = doubleDistance * -1
+				--)
+				--WriteFloat casFile doubleDistance
+				--if(writeLog == true) then
+				--(
+					--format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
+				--)
+				--doubleDistanceCounter += 1
+			--)
+			--if(writeLog == true) then
+			--(
+				--format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			--)
 			
 			-- Write control bone position
 			--print("Adding control bone position to root bone " + boneList[1].name)
