@@ -10,22 +10,22 @@ Make sure you have <B>.NET Desktop Runtime 6.0.xx </B> installed. You can find t
 
 ### First Window
 The first window will ask you to browse to your campaign directory. This does not need to be the 'base' directory, because the tool automatically searches that one if certain files can not be found in your selected campaign.<br/><br/>
-[Imgur](https://i.imgur.com/ldJKYH0.png)
+![Imgur](https://i.imgur.com/ldJKYH0.png)
 
 The continue button will become enabled when you have chosen a valid directory.
 
 ### Validation
 After clicking the 'Continue' button, the tool will load required files and also validates them. This might take some time, but you can see the progressbar.<br/><br/>
-[Imgur](https://i.imgur.com/GRC2iTi.png)
+![Imgur](https://i.imgur.com/GRC2iTi.png)
 
 During the validation process you might get some warning dialogs, that tell you something is wrong in one of your files, or (most of the time) missing lookup entries:
 
-[Imgur](https://i.imgur.com/zQ5E30X.png)
+![Imgur](https://i.imgur.com/zQ5E30X.png)
 
 I advice that you solve these problems. You could also get some messages with an exception stack trace; those are application issues and should be forwarded to me.
 
 ### Campaign View Window
-[Imgur](https://i.imgur.com/B0HsXNB.png)
+![Imgur](https://i.imgur.com/B0HsXNB.png)
 
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
