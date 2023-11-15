@@ -30,6 +30,14 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.3</b></i>
+- Added <b>Display -> Text</b> options. Toggle between Internal and Localized names
+- Added <b>Info</b> options to view current application version
+- Added read support for <i>descr_sm_resources.txt</i>
+- Added <b><i>Resources</i></b> tabsheet section. You can now view regions that has specific resources. You can also define own overlay color for both viewing modes
+- Added more warnings
+- Disabled the 'Numeric Spinners', preventing accidentally changing the RGB entries.
+
 <i><b>Version 1.0.2</b></i>
 - Added menu bar with close and option to load another campaign
 - Improved validation window 'Calculating Borders' speed
