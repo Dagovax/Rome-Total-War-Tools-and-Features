@@ -30,11 +30,21 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.4</b></i>
+- Added user settings. Certain settings will now be saved over multiple sessions. 
+- Added menu shortcuts for certain actions
+- <b>Settings -> Reset User Settings</b> or (Alt+R) to reset saved user settings to default. Will relaunch the window.
+- Added counter when validating region borders, to keep you informed
+- Added <b>Search -> Find Region...</b> or (Ctl+F) dialog. You can now search regions based on input parameters.
+![Imgur](https://i.imgur.com/EVO9bw9.png)
+- Resources are now sorted.
+
 <i><b>Version 1.0.3</b></i>
 - Added <b>Display -> Text</b> options. Toggle between Internal and Localized names
 - Added <b>Info</b> options to view current application version
 - Added read support for <i>descr_sm_resources.txt</i>
 - Added <b><i>Resources</i></b> tabsheet section. You can now view regions that has specific resources. You can also define own overlay color for both viewing modes
+![Imgur](https://i.imgur.com/RXj574u.png)
 - Added more warnings
 - Disabled the 'Numeric Spinners', preventing accidentally changing the RGB entries.
 
