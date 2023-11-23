@@ -30,6 +30,11 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.5</b></i>
+- Added <b>File -> Reload (Ctl+R)</b> and <b>File -> Hard Reload</b> to (quickly) reload the campaign files after you made changes.
+- Added popup
+- Disabled the close button on the top right, to release all pc resources, use <b>File -> Exit</b> or Alt+F4.
+
 <i><b>Version 1.0.4</b></i>
 - Added user settings. Certain settings will now be saved over multiple sessions. 
 - Added menu shortcuts for certain actions
