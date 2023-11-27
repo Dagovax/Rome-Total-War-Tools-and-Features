@@ -30,6 +30,11 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.7</b></i>
+- Added Mercenary pool support and highlighting.
+- Check out the 'Orphan Regions' tab for all regions that are not defined in descr_mercenaries.txt
+- You can choose to sort the pool list or not. Setting will be saved inside the program for next usage.
+
 <i><b>Version 1.0.6</b></i>
 - Fixed the issue where resources could not be read
 
