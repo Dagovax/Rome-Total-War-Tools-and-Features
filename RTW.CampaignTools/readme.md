@@ -30,6 +30,14 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.8</b></i>
+- Added initial descr_strat.txt read. Defined resources will now be loaded
+- Updated <i>Resources</i> dialog (when you click on resources under region information)
+- If resources in region information window is longer than the width, text will roll to the left when you hover over it.
+- Added <b>Display -> Zoom</b> options. You can set zoom level modification here, which enables higher zoom level.
+- Added double buffering for the map view; there is lower chance this way that you get 'flicking' issue when clicking or scrolling on the map. Only 'lag' I encounter is while zooming.
+- Fixed application hanging when you don't have a lookup file for regions and settlement names. You still need that file though!
+
 <i><b>Version 1.0.7</b></i>
 - Added Mercenary pool support and highlighting.
 - Check out the 'Orphan Regions' tab for all regions that are not defined in descr_mercenaries.txt
