@@ -30,6 +30,15 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.9</b></i>
+- Fixed the issue where disabled quantity resources were not being read at all
+- Fixed the reload mechanism not working on descr_strat.txt
+- Removed Triumph Point value due to it being unused by the game
+- If a region has no belief breakdown, the textbox will not be shown
+- If you now click on an 'Orphan' region from the list, the region will be selected on the map
+- You can now zoom the map using <b>Alt + Mouse Scroll</b>
+- Added version info at the top bar
+
 <i><b>Version 1.0.8</b></i>
 - Added initial descr_strat.txt read. Defined resources will now be loaded
 - Updated <i>Resources</i> dialog (when you click on resources under region information)
