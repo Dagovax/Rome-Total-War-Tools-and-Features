@@ -16,10 +16,14 @@
 --										 --
 -- 		  Revision history:			 --
 --										 --
--- v1.1 -- current  					 --
+-- v1.2 -- current
+-- * Added SpeedTree setup
+-- * Added collision plane creator
+-- v1.1
 -- * Added import wall layout system
 
 global RTWSettlementTools_colorBlindMode = false
+global RTWSettlementTools_rotationIWTE = false
 
 function RTWSettlementTools_RoundFloat val dp = --rounds a float to a set number of decimal places
 (
@@ -524,18 +528,144 @@ function RTWSettlementTools_CreateWallSectionPlane inputString iwte =
 	return null
 )
 
+-- Get sub materials of an object
+function RTWSettlementTools_GetMaterialIDs obj =
+(
+	local idArr = #()
+	
+	for i in 1 to 99 do
+	(
+		obj.selectByMaterial i
+		local theFaces = getFaceSelection obj
+		if (theFaces as array).count != 0 do
+		(
+			append idArr i
+		)
+	)
+	return idArr
+)
+
+-- Set all vertices' vertex color to white
+function RTWSettlementTools_AllVertexColorsWhite obj =
+(
+	if(obj == undefined) then 
+	(
+		return null
+	)
+	convertToPoly obj
+	for i=1 to (getNumVerts obj) do
+	(
+		polyOp.setVertColor obj 0 i [255,255,255]	
+	)
+	convertToMesh obj
+)
+
+-- Detach materials by their IDs. Returns the detached objects
+function RTWSettlementTools_DetachMaterials obj =
+(
+	if(obj == undefined) then 
+	(
+		return null
+	)
+	if(obj.material != undefined) then
+	(
+		try
+		(
+			convertToPoly obj
+		) 
+		catch 
+		(
+			messageBox "Detach by material failed at obj conversion!" title:"Error!"
+			exit
+		)
+		local newObjArr = #()
+		
+		local original = obj
+		local polyObj = copy original
+		
+		local theMat = original.material
+		local idCount = theMat.numSubs
+		local idList = RTWSettlementTools_GetMaterialIDs polyObj
+		
+		-- start detaching
+		for i in idList do
+		(
+			polyObj.selectByMaterial i
+			local theFaces = getFaceSelection polyObj
+			local matName = theMat[i].name
+			
+			polyOp.detachFaces polyObj theFaces asnode:true name:matName
+			local theDetachedObj = (getNodeByName matName)
+			
+			if isValidNode theDetachedObj do
+			(
+				if classof theMat[i] == Material then
+				(
+					theDetachedObj.material = theMat[i]
+				) 
+				else
+				(
+					theDetachedObj.material = theMat
+				)
+				convertToMesh theDetachedObj
+				append newObjArr theDetachedObj
+			)
+		)
+		delete polyObj
+		delete original
+		return newObjArr
+	)
+)
+
+-- Creates a collision box
+function RTWSettlementTools_CreateBoundingBox obj =
+(
+	local isMesh = (classof obj == Editable_Mesh)
+	if(isMesh) then
+	(
+		convertToPoly obj
+	)
+	local vertCount = polyOp.getNumVerts obj
+	local xVals = #()
+	local yVals = #()
+	local zVals = #()
+	
+	for v=1 to vertCount do
+	(
+		local vertPos = polyop.getVert obj v
+		append xVals vertPos.x
+		append yVals vertPos.y
+		append zVals vertPos.z
+	)
+ 		
+	local theWidth = (amax xVals) - (amin xVals)
+	local theLength = (amax yVals) - (amin yVals)
+	local theHeight = (amax zVals) - (amin zVals)
+	
+	local avgPos = [(((amax xVals) + (amin xVals)) / 2.),(((amax yVals) + (amin yVals)) / 2.),(((amax zVals) + (amin zVals)) / 2.)]
+	local theBox = box length:theLength width:theWidth height:theHeight xray:true
+	theBox.pivot = theBox.center
+	theBox.pos = avgPos
+	if(isMesh) then
+	(
+		convertToMesh obj
+	)
+	return theBox
+)
+
 utility RTWSettlementTools "RTW Settlement Tools"
 (
 	group "Info:"
 	(
 		label titleLabel1 "RTW Settlement Tools"
-		label titleLabel2 "v1.1" color:(color 0 20 80)
+		label titleLabel2 "v1.2" color:(color 0 20 80)
 		HyperLink author "by Sirrianus Dagovax" align:#center address:"mailto:dagovax@gmail.com" color:(color 0 0 170) hoverColor:(color 170 0 0)
 	)
 	
 	group "Settlement Plan"
 	(
-		checkbox iwteExported "IWTE" width:130 height:15 checked:true tooltip:"If your scene contains overlay + underlay converted with IWTE, there is no need to 'flip' the X, Y positions. If you used old Max script for import, turn this off."
+		checkbox iwteExported "IWTE" width:60 height:15 checked:true tooltip:"If your scene contains overlay + underlay converted with IWTE, there is no need to 'flip' the X, Y positions. If you used old Max script for import, turn this off." across:2
+		checkbox noRotation "No Rotation" width:70 height:15 checked:false tooltip:"If IWTE option is checked, by default rotation will be added + 180 degrees. Turning this off will simply export current scene settings." 
 		groupBox clingLine1 width: 130 height:2
 		button exportSelectedBuildings "Export Scene Plan" width:130 height:30 tooltip:"Exports (selected) meshes/groups and their relative position to be used inside the plan. Best to import items and set Pivot to 0,0,0 before moving buildings around."
 		groupBox splitLine1 width: 130 height:2
@@ -543,11 +673,33 @@ utility RTWSettlementTools "RTW Settlement Tools"
 		button importWallLayout "Import Wall Layout" width:130 height:30 tooltip:"Select a settlement plan .txt file and if it has borders defined, the border will be drawn using wall sections (planes)."
 	)
 	
+	on iwteExported changed val do
+	(
+		if(iwteExported.checked) then
+		(
+			noRotation.enabled = true
+			if(RTWSettlementTools_rotationIWTE) then
+			(
+				noRotation.checked = true
+			)
+		) else
+		(
+			noRotation.enabled = false
+			noRotation.checked = false
+		)
+	)
+	
+	on noRotation changed val do
+	(
+		RTWSettlementTools_rotationIWTE = noRotation.checked
+	)
+	
 	-- Export (selection) to a plan
 	on exportSelectedBuildings pressed do
 	(
 		local useSelection = true
 		local usedIWTE = iwteExported.checked
+		local skipRotation =  noRotation.checked
 		local selectionArr = for t in selection collect t
 		if(selectionArr == undefined or selectionArr.count == 0) then
 		(
@@ -579,7 +731,13 @@ utility RTWSettlementTools "RTW Settlement Tools"
 			(
 				posX = RTWSettlementTools_RoundFloat (b.pos.x) 2
 				posY = RTWSettlementTools_RoundFloat (b.pos.y) 2
-				rot = RTWSettlementTools_RoundFloat (RTWSettlementTools_AddRotation b.rotation.z_rotation 180) 2
+				if(skipRotation) then
+				(
+					rot = RTWSettlementTools_RoundFloat b.rotation.z_rotation 2
+				) else
+				(
+					rot = RTWSettlementTools_RoundFloat (RTWSettlementTools_AddRotation b.rotation.z_rotation 180) 2	
+				)
 			) else
 			(
 				posX = RTWSettlementTools_RoundFloat (b.pos.x *-1) 2
@@ -746,6 +904,161 @@ utility RTWSettlementTools "RTW Settlement Tools"
 		print("Apply Transformation -> Completed")
 	)
 	
+	group "Buildings"
+	(
+		button detachByMaterial "Detach by Materials" width:130 height:30 tooltip:"Checks the selected (imported) object for any sub-materials, and split the faces by their materials into seperate objects."
+		button vertexColorWhite "Set Vertex Color White" width:130 height:30 tooltip:"Set the vertex color of the selected object(s) to white."
+		groupBox buildingClingLine1 width: 130 height:2
+		checkbox useZZeroBounding "Use At Zero Collision" width:130 height:15 checked:false tooltip:"When checked, the script will slice the object along the Z=0 axis, and use only those vertices that are at Z=0. Not recommended when your object is small at Z=0, but wider above the ground!"
+		button createCollisionPlane "Create Collision Plane" width:130 height:30 tooltip:"Automatically creates a simple collision plane that covers selected object."
+		groupBox buildingClingLine2 width: 130 height:2
+		button createCollision3dBox "Create Collision3d Box" width:130 height:30 tooltip:"Automatically creates a bounding box as collision3d around the selected object."
+	)
+	
+	-- Detach by materials
+	on detachByMaterial pressed do
+	(
+		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
+		if(selectionArr == undefined or selectionArr.count == 0 or selectionArr.count > 1) then
+		(
+			messageBox "You need to select a single mesh first!" title:"Error!"
+			return null
+		)
+		RTWSettlementTools_DetachMaterials selectionArr[1]
+	)
+	
+	-- Set vertex colors to white of selected objects
+	on vertexColorWhite pressed do
+	(
+		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
+		if(selectionArr == undefined or selectionArr.count == 0) then
+		(
+			messageBox "You need to select at least one mesh!" title:"Error!"
+			return null
+		)
+		
+		for b in selectionArr do
+		(
+			RTWSettlementTools_AllVertexColorsWhite b
+		)
+	)
+	
+	-- Automatically creates a simple collision plane that covers selected object
+	on createCollisionPlane pressed do
+	(
+		local useAtZeroCollision = useZZeroBounding.checked
+		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
+		if(selectionArr == undefined or selectionArr.count == 0 or selectionArr.count > 1) then
+		(
+			messageBox "You need to select a mesh first!" title:"Error!"
+			return null
+		)
+		local selectedObj = selectionArr[1]
+		local copyObj = copy selectedObj
+		local collisionPlane = Plane length:2 width:2 lengthsegs:1 widthsegs:1 name:"collision"
+		
+		local collisionBox = RTWSettlementTools_CreateBoundingBox selectedObj
+		if(collisionBox == undefined) then
+		(
+			delete copyObj
+			return null
+		)
+		collisionPlane.width = collisionBox.width
+		collisionPlane.length = collisionBox.length
+		collisionPlane.pos.x = collisionBox.pos.x
+		collisionPlane.pos.y = collisionBox.pos.y
+		delete collisionBox
+		
+		if(useAtZeroCollision) then
+		(
+			local sliceMod = SliceModifier slice_type:4
+			addModifier copyObj sliceMod
+			sliceMod.slice_plane.pos = [0, 0, 0]
+			sliceMod.slice_plane.rotation = eulerAngles -90 0 0
+			convertTo copyObj Editable_Mesh
+			-- Update the viewport
+			update copyObj
+			
+			local numVertsAtZero = getNumVerts copyObj
+			-- Initialize an array to store vertices at Z=0
+			local verticesAtZZero = #()
+			
+			-- Iterate through vertices to find those at Z=0
+			for i=1 to numVertsAtZero do
+			(
+				local vertPos = getVert copyObj i
+				if abs(vertPos.z) < 0.001 do
+				(
+					append verticesAtZZero i
+				)
+			)
+			
+			if(verticesAtZZero != undefined and verticesAtZZero.count > 0) then
+			(
+				-- Initialize variables to store extreme positions
+				local minX = 1e9 -- Initializing with a large number
+				local minY = 1e9
+				local maxX = -1e9 -- Initializing with a small number
+				local maxY = -1e9
+				
+				for i in verticesAtZZero do
+				(
+					local vertPos = getVert copyObj i
+					-- Record extreme positions
+					if vertPos.x < minX do minX = vertPos.x
+					if vertPos.y < minY do minY = vertPos.y
+					if vertPos.x > maxX do maxX = vertPos.x
+					if vertPos.y > maxY do maxY = vertPos.y
+				)
+				-- Calculate the width and height of the plane based on extreme positions
+				local width = abs(maxX - minX)
+				local height = abs(maxY - minY)
+				
+				-- Set the plane's width and height
+				collisionPlane.length = height
+				collisionPlane.width = width
+				
+				-- Calculate the center position
+				local centerX = (maxX + minX) / 2.0
+				local centerY = (maxY + minY) / 2.0
+				
+				collisionPlane.position.x = centerX
+				collisionPlane.position.y = centerY
+			)
+		)
+		collisionPlane.pivot = [0,0,0]
+		resetXForm collisionPlane
+		-- Apply the transformation permanently
+		convertToMesh collisionPlane
+		collisionPlane.material = selectedObj.material
+		
+		delete copyObj
+		redrawViews() 
+	)
+	
+	-- Create collision3d box
+	on createCollision3dBox pressed do
+	(
+		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
+		if(selectionArr == undefined or selectionArr.count == 0 or selectionArr.count > 1) then
+		(
+			messageBox "You need to select a mesh first!" title:"Error!"
+			return null
+		)
+		local selectedObj = selectionArr[1]
+		local collisionBox = RTWSettlementTools_CreateBoundingBox selectedObj
+		if(collisionBox == undefined) then
+		(
+			return null
+		)
+		collisionBox.name = "collision3d"
+		collisionBox.pivot = [0,0,0]
+		resetXForm collisionBox
+		-- Apply the transformation permanently
+		convertToMesh collisionBox
+		collisionBox.material = collisionBox.material
+	)
+	
 	group "Strat Residences"
 	(
 		button scaleDown "Scale Down" width:130 height:30 tooltip:"Scale down (selected) objects to strat map scale (2,5%)"
@@ -765,6 +1078,49 @@ utility RTWSettlementTools "RTW Settlement Tools"
 		for b in selectionArr do
 		(
 			b.scale = [0.025, 0.025, 0.025]
+		)
+	)
+	
+	group "SpeedTree"
+	(
+		checkbox rotateSpeedTree "Rotate -90" width:130 height:15 checked:true tooltip:"Rotate the tree -90 degrees along the x-axis (to have it standing up)."
+		checkbox detachSpeedTreeMaterials "Detach from Materials" width:130 height:15 checked:true tooltip:"Automatically detach object's elements using materials."
+		button setUpSpeedTree "Set Up .SRT Tree" width:130 height:30 tooltip:"scale up, rotate and detach selected imported SpeedTree tree objects to building scale (125%). Note that these .srt files are exported using UnrealEngine!"
+	)
+	
+	-- Scale up imported SpeedTree (selected) tree objects to building scale (125%)
+	on setUpSpeedTree pressed do
+	(
+		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
+		-- Filter out anything that has a parent in the outputArr
+		selectionArr = for b in selectionArr where ((findItem selectionArr b.parent == 0) and (not b.isFrozen)) collect b
+		if(selectionArr == undefined or selectionArr.count == 0 or selectionArr.count > 1) then
+		(
+			messageBox "You need to select a SpeedTree first!" title:"Error!"
+			return null
+		)
+		local speedTree = selectionArr[1]
+		
+		-- Scale
+		speedTree.scale = [1.25, 1.25, 1.25]
+		
+		if(rotateSpeedTree.checked) then
+		(
+			-- Rotate -90 degrees
+			speedTree.rotation = eulerAngles 90 0 0
+		)
+		
+		if(detachSpeedTreeMaterials.checked) then
+		(
+			local resultArr = RTWSettlementTools_DetachMaterials speedTree
+			if(resultArr != undefined and resultArr.count > 0) then
+			(
+				for b in resultArr do
+				(
+					print b
+					RTWSettlementTools_AllVertexColorsWhite b
+				)
+			)
 		)
 	)
 )
