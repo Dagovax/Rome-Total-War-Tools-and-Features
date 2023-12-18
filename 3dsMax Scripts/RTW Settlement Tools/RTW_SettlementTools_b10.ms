@@ -16,7 +16,10 @@
 --										 --
 -- 		  Revision history:			 --
 --										 --
--- v1.2 -- current
+-- v1.3 -- current
+-- * Fixed issues with collision and collision3d generator. They now have default UVWMap applied
+-- * You can now also select multiple objects for above buttons
+-- v1.2
 -- * Added SpeedTree setup
 -- * Added collision plane creator
 -- v1.1
@@ -618,38 +621,54 @@ function RTWSettlementTools_DetachMaterials obj =
 )
 
 -- Creates a collision box
-function RTWSettlementTools_CreateBoundingBox obj =
+function RTWSettlementTools_CreateBoundingBox selectionArr =
 (
-	local isMesh = (classof obj == Editable_Mesh)
-	if(isMesh) then
+	if(selectionArr == undefined or selectionArr.count <= 0) then
 	(
-		convertToPoly obj
+		return undefined
 	)
-	local vertCount = polyOp.getNumVerts obj
+	selectionArr = for b in selectionArr where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
+	
 	local xVals = #()
 	local yVals = #()
 	local zVals = #()
-	
-	for v=1 to vertCount do
+		
+	for obj in selectionArr do
 	(
-		local vertPos = polyop.getVert obj v
-		append xVals vertPos.x
-		append yVals vertPos.y
-		append zVals vertPos.z
+		local isMesh = (classof obj == Editable_Mesh)
+		if(isMesh) then
+		(
+			convertToPoly obj
+		)
+		
+		local vertCount = polyOp.getNumVerts obj
+		for v=1 to vertCount do
+		(
+			local vertPos = polyop.getVert obj v
+			append xVals vertPos.x
+			append yVals vertPos.y
+			append zVals vertPos.z
+		)
+		if(isMesh) then
+		(
+			convertToMesh obj
+		)
 	)
- 		
+	
 	local theWidth = (amax xVals) - (amin xVals)
 	local theLength = (amax yVals) - (amin yVals)
 	local theHeight = (amax zVals) - (amin zVals)
 	
 	local avgPos = [(((amax xVals) + (amin xVals)) / 2.),(((amax yVals) + (amin yVals)) / 2.),(((amax zVals) + (amin zVals)) / 2.)]
-	local theBox = box length:theLength width:theWidth height:theHeight xray:true
+	local theBox = box length:theLength width:theWidth height:theHeight
 	theBox.pivot = theBox.center
 	theBox.pos = avgPos
-	if(isMesh) then
-	(
-		convertToMesh obj
-	)
+
+	theBox.material = selectionArr[1].material
+	local uvwMapMod = UVWMap()
+	addModifier theBox uvwMapMod
+	uvwMapMod.maptype = 4
+	
 	return theBox
 )
 
@@ -658,7 +677,7 @@ utility RTWSettlementTools "RTW Settlement Tools"
 	group "Info:"
 	(
 		label titleLabel1 "RTW Settlement Tools"
-		label titleLabel2 "v1.2" color:(color 0 20 80)
+		label titleLabel2 "v1.3" color:(color 0 20 80)
 		HyperLink author "by Sirrianus Dagovax" align:#center address:"mailto:dagovax@gmail.com" color:(color 0 0 170) hoverColor:(color 170 0 0)
 	)
 	
@@ -910,9 +929,9 @@ utility RTWSettlementTools "RTW Settlement Tools"
 		button vertexColorWhite "Set Vertex Color White" width:130 height:30 tooltip:"Set the vertex color of the selected object(s) to white."
 		groupBox buildingClingLine1 width: 130 height:2
 		checkbox useZZeroBounding "Use At Zero Collision" width:130 height:15 checked:false tooltip:"When checked, the script will slice the object along the Z=0 axis, and use only those vertices that are at Z=0. Not recommended when your object is small at Z=0, but wider above the ground!"
-		button createCollisionPlane "Create Collision Plane" width:130 height:30 tooltip:"Automatically creates a simple collision plane that covers selected object."
+		button createCollisionPlane "Create Collision Plane" width:130 height:30 tooltip:"Automatically creates a simple collision plane that covers selected object(s)."
 		groupBox buildingClingLine2 width: 130 height:2
-		button createCollision3dBox "Create Collision3d Box" width:130 height:30 tooltip:"Automatically creates a bounding box as collision3d around the selected object."
+		button createCollision3dBox "Create Collision3d Box" width:130 height:30 tooltip:"Automatically creates a bounding box as collision3d around the selected object(s)."
 	)
 	
 	-- Detach by materials
@@ -948,19 +967,16 @@ utility RTWSettlementTools "RTW Settlement Tools"
 	(
 		local useAtZeroCollision = useZZeroBounding.checked
 		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
-		if(selectionArr == undefined or selectionArr.count == 0 or selectionArr.count > 1) then
+		if(selectionArr == undefined or selectionArr.count <= 0) then
 		(
-			messageBox "You need to select a mesh first!" title:"Error!"
+			messageBox "You need to select one or more mesh(es) first!" title:"Error!"
 			return null
 		)
-		local selectedObj = selectionArr[1]
-		local copyObj = copy selectedObj
 		local collisionPlane = Plane length:2 width:2 lengthsegs:1 widthsegs:1 name:"collision"
 		
-		local collisionBox = RTWSettlementTools_CreateBoundingBox selectedObj
+		local collisionBox = RTWSettlementTools_CreateBoundingBox selectionArr
 		if(collisionBox == undefined) then
 		(
-			delete copyObj
 			return null
 		)
 		collisionPlane.width = collisionBox.width
@@ -970,23 +986,45 @@ utility RTWSettlementTools "RTW Settlement Tools"
 		delete collisionBox
 		
 		if(useAtZeroCollision) then
-		(
-			local sliceMod = SliceModifier slice_type:4
-			addModifier copyObj sliceMod
-			sliceMod.slice_plane.pos = [0, 0, 0]
-			sliceMod.slice_plane.rotation = eulerAngles -90 0 0
-			convertTo copyObj Editable_Mesh
-			-- Update the viewport
-			update copyObj
-			
-			local numVertsAtZero = getNumVerts copyObj
+		(			
 			-- Initialize an array to store vertices at Z=0
 			local verticesAtZZero = #()
+			local mergeObj = undefined
+			
+			for obj in selectionArr do
+			(
+				local copyObj = copy obj
+				convertToMesh copyObj
+				if(mergeObj == undefined) then
+				(
+					mergeObj = copyObj
+					mergeObj.name ="Merge_Obj001"
+				)
+				else
+				(
+					meshop.attach mergeObj copyObj collapse:true		
+				)
+			)
+			mergeObj.pivot = [0,0,0]
+			resetXForm mergeObj
+			-- Apply the transformation permanently
+			convertToMesh mergeObj
+			
+			local sliceMod = SliceModifier slice_type:4
+			addModifier mergeObj sliceMod
+			sliceMod.slice_plane.pos = [0, 0, 0]
+			sliceMod.slice_plane.rotation = eulerAngles 0 0 0
+			
+			convertTo mergeObj Editable_Mesh
+			-- Update the viewport
+			update mergeObj
+			
+			local numVertsAtZero = getNumVerts mergeObj
 			
 			-- Iterate through vertices to find those at Z=0
 			for i=1 to numVertsAtZero do
 			(
-				local vertPos = getVert copyObj i
+				local vertPos = getVert mergeObj i
 				if abs(vertPos.z) < 0.001 do
 				(
 					append verticesAtZZero i
@@ -1003,7 +1041,7 @@ utility RTWSettlementTools "RTW Settlement Tools"
 				
 				for i in verticesAtZZero do
 				(
-					local vertPos = getVert copyObj i
+					local vertPos = getVert mergeObj i
 					-- Record extreme positions
 					if vertPos.x < minX do minX = vertPos.x
 					if vertPos.y < minY do minY = vertPos.y
@@ -1025,14 +1063,15 @@ utility RTWSettlementTools "RTW Settlement Tools"
 				collisionPlane.position.x = centerX
 				collisionPlane.position.y = centerY
 			)
+			
+			delete mergeObj
 		)
 		collisionPlane.pivot = [0,0,0]
 		resetXForm collisionPlane
 		-- Apply the transformation permanently
 		convertToMesh collisionPlane
-		collisionPlane.material = selectedObj.material
+		collisionPlane.material = selectionArr[1].material
 		
-		delete copyObj
 		redrawViews() 
 	)
 	
@@ -1040,13 +1079,13 @@ utility RTWSettlementTools "RTW Settlement Tools"
 	on createCollision3dBox pressed do
 	(
 		local selectionArr = for b in selection where ((classOf b == Editable_Mesh or classOf b == Editable_Poly or classOf b == plane or isGroupHead b)) collect b
-		if(selectionArr == undefined or selectionArr.count == 0 or selectionArr.count > 1) then
+		if(selectionArr == undefined or selectionArr.count <= 0) then
 		(
 			messageBox "You need to select a mesh first!" title:"Error!"
 			return null
 		)
 		local selectedObj = selectionArr[1]
-		local collisionBox = RTWSettlementTools_CreateBoundingBox selectedObj
+		local collisionBox = RTWSettlementTools_CreateBoundingBox selectionArr
 		if(collisionBox == undefined) then
 		(
 			return null
@@ -1056,7 +1095,7 @@ utility RTWSettlementTools "RTW Settlement Tools"
 		resetXForm collisionBox
 		-- Apply the transformation permanently
 		convertToMesh collisionBox
-		collisionBox.material = collisionBox.material
+		redrawViews() 
 	)
 	
 	group "Strat Residences"
