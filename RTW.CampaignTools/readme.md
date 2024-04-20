@@ -30,6 +30,20 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.10</b></i>
+- Added map_heights.tga read support
+- Added map_ground_types.tga read support
+- Added descr_climates.txt read support
+- Added map_climates.tga read support
+- Added map_features.tga read support
+- Tool now starts in main window. You can change settings there before loading a campaign
+- Added <b>Settings -> Campaign -> Skip Border Calculation</b>. If you check this setting, loading the campaign files will skip border calculation process, which will save a lot of calculation time, but will result in missing borders.
+- Added <b>Display -> Overlay -> map_features.tga -> Hide Black Pixels</b>
+- Added a new `Overlay` tab wich shows you the (scaled down) version of the map files. 
+- Added <b>Campaign -> Fix -> Create corrected_regions.tga</b>. In case you do not have a faulty map_heights.tga, this will generate a `corrected_regions.tga`, like how OG engine did. This is still beta
+- Added <b>Campaign -> Maps -> ... -> Export scaled image</b>. This is super usefull. This will exports a map_heights, map_ground_types or map_climate with the same size as your map_regions.tga file. Exactly how the engine also processes the tiles on the map. So perfect to use as overlay in your photoshop psd files, to check if you are placing settlements on correct tiles!
+- Reworked Trade Resource tab. Icons will be loaded as well, if you check <b>Display -> Resources -> Render Images</b>. With this checked, if you select a resource, the position on the map will be marked with the resource icon (even when not in region highlight mode. 
+
 <i><b>Version 1.0.9</b></i>
 - Fixed the issue where disabled quantity resources were not being read at all
 - Fixed the reload mechanism not working on descr_strat.txt
