@@ -30,6 +30,14 @@ I advice that you solve these problems. You could also get some messages with an
 This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. Note that the current version is view-only, meaning that you can not edit stuff with this tool.
 
 ## Change Log
+<i><b>Version 1.0.12</b></i>
+- Added read support for text data for resources
+- Fixed an issue where OG resources could cause an exception to be thrown
+- Added <b>Display -> Resources -> Ellipse Transparency</b> setting, which allows you to change the transparancy of the ellipse that is rendered behind the resource icon.
+- Added <b>Display -> Resources -> Icon Scale</b> setting, which changes the scale of the rendered resource icon on the main view
+- Added a track bar to Resources side panel to scale down the resource icons in the list
+- Improved the placement of resource icons on the main view
+
 <i><b>Version 1.0.10</b></i>
 - Added map_heights.tga read support
 - Added map_ground_types.tga read support
