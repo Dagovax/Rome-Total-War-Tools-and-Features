@@ -66,6 +66,14 @@ Resource quantity etc for Rome Remastered can be seen in the region information 
 The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
 
 ## Change Log
+<i><b>Version 1.0.14</b></i>
+- Added multiple themes. Select the application theme that fits you best under <b>Theme</b>
+- Added **map.wfc** read/write support. Currently you can edit placement information, such as ambient settlement positions!
+- Added a setting that saves the previous selected campaign location when you load one. Next time you load a campaign it is already filled in the search box
+- Some optimizations
+- Added region size warning message, if you have regions that are bigger than the maximum of 100x100 allowed.
+- When a **map_heights.hgt** file is present, the warnings of black pixels in **map_heights.tga** are now skipped.
+
 <i><b>Version 1.0.13</b></i>
 - Fixed an issue where the application would still be running in the background when loading new campaign
 - Fixed the issue where resource icons were not loaded correctly
