@@ -66,6 +66,22 @@ Resource quantity etc for Rome Remastered can be seen in the region information 
 The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
 
 ## Change Log
+***Version 1.0.15***
+- Fixed some dialogs not applying the correct theme once shown.
+- Added multiple **Settings -> Campaign -> Ignore Warnings** options. These warnings will be ignored during validation if checked.
+- Changed yellow color on the Default theme to match that of the RTW UI panel color.
+- Added a x50 zoom factor. Note that the bigger the zoom, the more CPU the tool uses.
+- Added a Grid, which can be turned on and off in **Display -> Grid**. Also allows you to pick the grid color.
+- Fixed an issue where resource icons were not in the correct position when scaled.
+- Added a Generic tab that shows useful information about loaded campaign files.
+- Previously 'Region Information' is now a tab next to Generic information called 'Selected Region'.
+- Resources assigned to a region are now moved to a new tab 'Region Usages'.
+- Region Usages also shows the region's mercenary pool information.
+- Updated `descr_mercenaries.txt` warnings. You now get warnings if a region is already used in another pool, or when a region is orphan (unless turned off in settings).
+- Added a new **Warnings** tab, next to Overlays, which shows all warnings that occurred during the validation in a sortable list.
+- Fixed an issue when being in full screen, a tight border could be seen around the application that was the background (application).
+- Added a **Campaign -> Generate** menu, with currently the ability to generate a `descr_regions_and_settlement_name_lookup.txt` file.
+
 <i><b>Version 1.0.14</b></i>
 - Added multiple themes. Select the application theme that fits you best under <b>Theme</b>
 - Added **map.wfc** read/write support. Currently you can edit placement information, such as ambient settlement positions!
