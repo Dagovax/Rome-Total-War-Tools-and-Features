@@ -66,6 +66,14 @@ Resource quantity etc for Rome Remastered can be seen in the region information 
 The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
 
 ## Change Log
+***Version 1.0.16***
+- Slave resources defined in *descr_regions.txt* will now be ignored, and a warning will be give if defined.
+- Sea regions too can now be clicked. If 'Color All Regions' is unchecked, sea regions will now use Theme backcolor so they are easier to find once clicked.
+- Added validation against *map_heights.tga*. If a settlement/port is placed on an invalid tile a warning will be given.
+- Added new region settlement/port validation that also checks if surrounding tiles are valid (neighbouring region pixels around are not allowed).
+- Once a region is selected on the main view the tab will switch to `Selected Region` by default.
+- Added a progress counter for settlement/port validation.
+
 ***Version 1.0.15***
 - Fixed some dialogs not applying the correct theme once shown.
 - Added multiple **Settings -> Campaign -> Ignore Warnings** options. These warnings will be ignored during validation if checked.
