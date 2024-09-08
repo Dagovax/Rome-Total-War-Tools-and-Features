@@ -66,6 +66,16 @@ Resource quantity etc for Rome Remastered can be seen in the region information 
 The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
 
 ## Change Log
+***Version 1.0.18***
+- Fixed some issues regarding to `descr_namelist.txt`/`descr_names.txt` validation
+- Added `descr_strat.txt` validation and parsing
+- With above option, descr_strat also validates families and relatives.
+- Added Family Tree visualization. Can be accessed in **Campaign -> Visualize -> Family Tree**
+- Added validation for regions that do not have any fertile ground type pixels
+- Warnings now also take notice of the **Display -> Text** options. 
+- Mercenary pool highlight now shows mercenary pool regions in red that are used in multiple pools. Only the first pool with that region is shown in green.
+- Some minor fixes and optimalizations. 
+
 ***Version 1.0.17***
 - `corrected_regions.tga` creation now also takes into account a map_heights.hgt in your campaign folder. So black pixels will be created correctly.
 - `corrected_regions.tga` creation now also fixes port/settlement bordering neighbouring regions.
