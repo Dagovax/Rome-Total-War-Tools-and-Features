@@ -66,6 +66,14 @@ Resource quantity etc for Rome Remastered can be seen in the region information 
 The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
 
 ## Change Log
+***Version 1.0.19***
+- Fixed the bug where resource listbox was too small to be clickable in **Region Usages** tab.
+- Fixed a bug where resource icons were not displayed by default, due to settings being ignored.
+- Fixed main menu toolstrip font color being the same as background color (white).
+- Added `descr_unit_variation.txt` parsing and validation. It will detect duplicate region entries and will validate regions that are not present in the file.
+- Fixed some dialogs where region name was not displayed correctly.
+- `map_features` black pixels will now be invisible by default.
+
 ***Version 1.0.18***
 - Fixed some issues regarding to `descr_namelist.txt`/`descr_names.txt` validation
 - Added `descr_strat.txt` validation and parsing
