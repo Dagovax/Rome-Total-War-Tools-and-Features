@@ -67,6 +67,9 @@ The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resour
 
 ## Change Log
 ***Version 1.0.19***
+- Fixed a bug where **File** and **Campaign** in main menu were swapped.
+- Fixed a crash error when opening resource listbox with an unknown resource.
+- Added two`descr_strat.txt` checks. The first will add warnings for regions not defined as settlements. The second will add a warning if a settlement has no army assigned. 
 - Fixed the bug where resource listbox was too small to be clickable in **Region Usages** tab.
 - Fixed a bug where resource icons were not displayed by default, due to settings being ignored.
 - Fixed main menu toolstrip font color being the same as background color (white).
