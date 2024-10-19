@@ -21,6 +21,10 @@
 -- v1.2 -- Added default safe and ## fix  			--
 --       -- renamed the tool  			--
 -- v1.3 -- Fixed errors due to scripts having duplicate functions   --
+-- v1.4 -- Export file name will be lowercase
+-- v1.5 -- Added Single weight button
+-- v1.6 -- Added nocull
+-- v1.7 -- Added skip LOD1 (for IWTE)
 ----------------------------------------------------------
 
 function RTWColladaTools_ReplaceSpaceWithUnderscore inputString = 
@@ -34,25 +38,179 @@ function RTWColladaTools_ReplaceSpaceWithUnderscore inputString =
 
 function RTWColladaTools_GetSkinVertsByBone sk id: exact:on = 
 (
-   if id == unsupplied do id = skinops.getselectedbone sk
+	if id == unsupplied do id = skinops.getselectedbone sk
    
-   verts = #{}
-   for k=1 to skinops.getnumbervertices sk do
-   (
-      found = off
-      for i=1 to skinops.getvertexweightcount sk k while not found do
-      (
-         if (skinops.getvertexweightboneid sk k i) == id do 
-         (
-            if not exact or (skinops.getvertexweight sk k i > 0) do
-            (
-               append verts k
-               found = on
-            )
-         )
-      )
-   )
-   verts
+	verts = #{}
+	for k=1 to skinops.getnumbervertices sk do
+	(
+	  found = off
+	  for i=1 to skinops.getvertexweightcount sk k while not found do
+	  (
+		 if (skinops.getvertexweightboneid sk k i) == id do 
+		 (
+			if not exact or (skinops.getvertexweight sk k i > 0) do
+			(
+			   append verts k
+			   found = on
+			)
+		 )
+	  )
+	)
+	verts
+)
+
+function RTWColladaTools_SkinRemoveUnusedBones obj =
+(
+	local weightThresh = 0.0001
+	select obj
+	for m in obj.modifiers where classof m == Skin do 
+	(
+		modPanel.setCurrentObject m
+
+		local vertCount = skinOps.GetNumberVertices m
+		local bonesCount = skinOps.GetNumberBones m
+		local unusedBones = #{1..bonesCount}
+			
+		for v = 1 to vertCount do 
+		(
+			local vertWeightCount = skinOps.GetVertexWeightCount m v
+
+			for i = 1 to vertWeightCount do 
+			(
+				local weight = skinOps.GetVertexWeight m v i
+				local boneID = skinOps.GetVertexWeightBoneID m v i
+				if weight >= weightThresh then 
+				(
+					unusedBones[boneID] = false
+				) else
+				(
+					unusedBones[boneID] = true
+				)
+			)
+		)
+		for i = bonesCount to 1 by -1 where unusedBones[i] do 
+		(
+			skinOps.SelectBone m i
+			skinOps.RemoveBone m
+		)
+	)
+)
+
+function RTWColladaTools_SetVertexWeightToSingleBone obj delZeroBones =
+(
+	local hasSkin = (obj.modifiers[#Skin] != undefined)
+	if(hasSkin) then
+	(
+		local numVerts = getNumVerts obj
+		local vertsWithoutSkin = #()
+		
+		select obj
+		max modify mode
+		for i=1 to numVerts do 
+		(
+			local boneArray = #()
+			local weightArray = #()
+			local newWeightArray = #()
+			local newBoneArray = #()
+			
+			boneArrayCount = skinOps.GetVertexWeightCount obj.modifiers[#Skin] i
+			if(boneArrayCount > 1) then -- Only if a vertex has multiple bones
+			(
+				local highestWeight = 0.0
+				local weightChanged = false
+				local currBoneIndex = 0
+				for k=1 to boneArrayCount do
+				(
+					-- get bones index and weights
+					local boneIndex = skinOps.GetVertexWeightBoneID obj.modifiers[#skin] i k
+					local boneWeight = skinOps.GetVertexWeight obj.modifiers[#skin] i k
+					if(boneWeight > highestWeight) then
+					(
+						currBoneIndex = boneIndex
+						highestWeight = boneWeight
+						weightChanged = true
+					)
+					append boneArray boneIndex
+					append weightArray boneWeight
+				)
+				
+				for p in boneArray do
+				(
+					if p == currBoneIndex then
+					(
+						append newBoneArray p
+						append newWeightArray 1.0 -- Set the bone to 1.0
+					)
+					else
+					(
+						append newBoneArray p
+						append newWeightArray 0.0
+					)
+				)
+				skinOps.SetVertexWeights obj.modifiers[#Skin] i newBoneArray newWeightArray
+			) else
+			(
+				if(boneArrayCount == 1) then
+				(
+					local boneIndex = skinOps.GetVertexWeightBoneID obj.modifiers[#skin] i 1
+					if(boneIndex == undefined) then
+					(
+						print ("Vertex " + i as string + " of mesh " + obj.name + " has no weight applied at all!")
+						append vertsWithoutSkin i
+					) 
+					else
+					(
+						append newBoneArray boneIndex
+						append newWeightArray 1.0
+						skinOps.SetVertexWeights obj.modifiers[#Skin] i newBoneArray newWeightArray
+					)
+				)
+				else -- no weight at all!
+				(
+					print ("Vertex " + i as string + " of mesh " + obj.name + " has no weight applied at all!")
+					append vertsWithoutSkin i
+				)
+			)
+		)
+		if(delZeroBones) then
+		(
+			RTWColladaTools_SkinRemoveUnusedBones obj
+		)
+		
+		if(vertsWithoutSkin.count > 0) then
+		(
+			local skinMod = obj.modifiers[#Skin]
+			for i = 1 to vertsWithoutSkin.count do
+			(
+				-- Get the position of the vertex
+				local vertPos = getVert obj vertsWithoutSkin[i]
+
+				-- Find the nearest bone
+				local nearestBone = undefined
+				local nearestDist = 999999 -- Some large initial distance
+
+				for boneIndex = 1 to skinOps.GetNumberBones skinMod do
+				(
+					local boneTM = getNodeTM obj
+					local bonePos = boneTM.translation
+					local dist = distance vertPos bonePos
+					
+					if dist < nearestDist do
+					(
+						nearestDist = dist
+						nearestBone = boneIndex
+					)
+				)
+
+				-- Assign the nearest bone with a weight of 1.0
+				if nearestBone != undefined do
+				(
+					skinOps.SetVertexWeights skinMod i nearestBone 1.0
+				)
+			)
+		)
+	)
+	return true
 )
 
 function RTWColladaTools_ConvertBitmapNameToIWTE inString =
@@ -99,6 +257,16 @@ function RTWColladaTools_ConvertBitmapNameToIWTE inString =
 function RTWColladaTools_ConvertBitmapNameFromIWTE inString =
 (
 	resultString = inString
+	
+	-- Remove nocull flag
+	local nc = "_nocull"
+	local noCullIndex = findString resultString nc
+	if(noCullIndex != undefined) then
+	(
+		resultString = replace resultString noCullIndex 7 "" 
+		print("Removing _nocull at end of texture name!")
+	)
+	
 	local hh = "hh_"
 	local hhIndex = findString resultString hh
 	if(hhIndex != undefined) then
@@ -137,41 +305,176 @@ function RTWColladaTools_ConvertBitmapNameFromIWTE inString =
 	return resultString
 )
 
-function RTWColladaTools_CheckMaterialName inBoolean =
+function RTWColladaTools_ConvertMaterialExtensionToIWTE inString = 
+(
+	local resultString = inString
+	
+	local tga = ".tga"
+	local tgaIndex = findString resultString tga
+	if(tgaIndex != undefined) then
+	(
+		resultString = replace resultString tgaIndex 4 "_tga"
+	)
+	
+	return resultString
+)
+
+function RTWColladaTools_ConvertMaterialExtensionFromIWTE inString = 
+(
+	local resultString = inString
+	
+	local tga = "_tga"
+	local tgaIndex = findString resultString tga
+	if(tgaIndex != undefined) then
+	(
+		resultString = replace resultString tgaIndex 4 ".tga"
+	)
+	
+	return resultString
+)
+
+function RTWColladaTools_CheckMaterialName inBoolean noCullArr changeMatBool ignoreFrozen =
 (
 	local allObjects = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
-	local mats = makeUniqueArray (for o in sceneMaterials collect o)
-	if(mats != undefined) then
+	if(ignoreFrozen) then
 	(
+		allObjects = for b in allObjects where (b.isFrozen == false) collect b
+	)
+	local mats = makeUniqueArray (for o in allObjects collect o.material)
+	if(mats != undefined) then
+	(		
 		for m in mats do
 		(
+			if(m == undefined) then
+			(
+				exit
+			)
 			local errorArr = #()
 			for b in getClassInstances bitmapTex target:m where b != undefined  do
 			(
-				textureName = getFilenameFile b.filename;
+				local noCull = false
+				textureName = getFilenameFile b.filename
 				if(inBoolean) then
 				(
+					if(noCullArr != undefined) then
+					(
+						for item in noCullArr do
+						(
+							if item[1] == textureName do
+							(
+								-- Texture name found, return its corresponding boolean value
+								noCull = item[2]
+							)
+						)
+					)
 					result = RTWColladaTools_ConvertBitmapNameToIWTE textureName
 				) else
 				(
 					result = RTWColladaTools_ConvertBitmapNameFromIWTE textureName
 				)
-				newName = (getFilenamePath b.filename) + result + (getFilenameType b.filename)
+				local newName = (getFilenamePath b.filename) + result + (getFilenameType b.filename)
+				local newMatName = RTWColladaTools_ConvertMaterialExtensionToIWTE result
+				if(inBoolean == true and noCull == true) then
+				(
+					newMatName =  newMatName + "_nocull"
+				)
+				
 				b.filename = newName
+				if(changeMatBool) then
+				(
+					m.name = newMatName -- Change material name
+				)
 				if (inBoolean == false) then
 				(
-					if (not doesFileExist newName) then
+					-- Remove nocull flag
+					local nc = "_nocull"
+					local noCullIndex = findString newName nc
+					if(noCullIndex != undefined) then
 					(
-						if (finditem errorArr newName == 0) then
+						newName = replace newName noCullIndex 7 "" 
+					)
+					b.filename = newName
+					if (not doesFileExist newName and newName != undefined and newName != "") then
+					(
+						local suffix = ".tga"
+						if ((substring newName (newName.count - suffix.count + 1) newName.count) == suffix) then
 						(
-							append errorArr newName
-							messageBox ("Could not find texture: \n\n'" + newName + "'") title:"Error!"	
+							newName = newName + ".dds"
 						)
+						else
+						(
+							newName = newName + ".tga"
+						)
+						
+						b.filename = newName
+						if (not doesFileExist newName and newName != undefined and newName != "") then
+						(							
+							if ((substring newName (newName.count - suffix.count + 1) newName.count) == suffix) then
+							(
+								newName = newName + ".dds"
+							)
+							
+							b.filename = newName
+							if (not doesFileExist newName and newName != undefined and newName != "") then
+							(
+								if (finditem errorArr newName == 0) then
+								(
+									append errorArr newName
+									messageBox ("Could not find texture: \n\n'" + newName + "'") title:"Error!"	
+								)
+							)
+						)
+					)
+					
+					if(changeMatBool) then
+					(
+						m.name = RTWColladaTools_ConvertMaterialExtensionFromIWTE newMatName
 					)
 				)
 			)
 		)	
 	)
+)
+
+function RTWColladaTools_GetNoCullTextures ignoreFrozen =
+(
+	local resultArr = #()
+	
+	local allObjects = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
+	if(ignoreFrozen) then
+	(
+		allObjects = for b in allObjects where (b.isFrozen == false) collect b
+	)
+	local mats = makeUniqueArray (for o in allObjects collect o.material)
+
+	local textures = #()
+		
+	if(mats != undefined) then
+	(			
+		for m in mats do
+		(
+			for b in getClassInstances bitmapTex target:m where b != undefined  do
+			(
+				local textureName = getFilenameFile b.filename
+				appendIfUnique textures textureName
+			)
+		)
+	)
+	
+	for textureName in textures do
+	(
+		local result = queryBox ("Do you want to enable No Back-face Culling to this texture?\n\n" + textureName) title:"No Back-face Culling" beep:true
+		if result then
+		(
+			append resultArr #(textureName, true)
+		)
+		else
+		(
+			append resultArr #(textureName, false)
+		)
+	)
+	
+	return resultArr
 )
 
 -- Get the root NODE (not bone!), either Armature or Scene Root depending on imported file
@@ -230,7 +533,7 @@ utility RTWColladaTools "RTW Collada Tools"
 	(
 		label titleLabel1 "RTW Collada Tools"
 		label extraLabel "using openCOLLADA"
-		label titleLabel2 "v1.3" color:(color 0 20 80)
+		label titleLabel2 "v1.7" color:(color 0 20 80)
 		label empt " "
 		label titleLabel3 "Use this tool to import" color:(color 0 180 50)
 		label titleLabel4 "Or export .DAE files." color:(color 0 180 50)
@@ -238,6 +541,26 @@ utility RTWColladaTools "RTW Collada Tools"
 		HyperLink author "by Sirrianus Dagovax" align:#center address:"mailto:dagovax@gmail.com" color:(color 0 0 170) hoverColor:(color 170 0 0)
 	)
 	label fillerLabel1 " "
+	
+	group "Generic:"
+	(
+		checkbox noCullBox "No Back-face Culling" width:130 height:15 checked:false tooltip:"On RR, buildings have back-face culling on by default. Checking this will add a flag to the texture name for IWTE, to disable back-face culling."
+		checkbox changeMaterialNamesBox "Auto Change Mat. Names" width:130 height:15 checked:false tooltip:"IWTE requires certain material name handling (for example for back-face culling). Disabling this might give problems for export."
+	)
+	
+    -- Event handler for the noCullBox
+    on noCullBox changed newState do
+    (
+        -- Change the state of change mat. names to true
+        if newState == true then
+        (
+            changeMaterialNamesBox.checked = true
+        )
+		else
+		(
+			changeMaterialNamesBox.checked = false
+		)
+    )
 	
 	group "Import / Export:"
 	(
@@ -248,6 +571,7 @@ utility RTWColladaTools "RTW Collada Tools"
 		button importScene "Import" width:130 height:30
 		groupBox line1 width: 130 height:2
 		checkbox exportIgnoreBones "Ignore Bone Check" width:130 height:15 checked:true tooltip:"When unchecked, bone count will be validated. Keep it checked when you want to export without bones"
+		checkbox exportIgnoresFrozen "Ignore Frozen Items" width:130 height:15 checked:true tooltip:"When checked, frozen meshes will not be exported."
 		button exportScene "Export" width:130 height:30
 	)
 	
@@ -286,7 +610,7 @@ utility RTWColladaTools "RTW Collada Tools"
 				Print("Importing file: " + importPath as string)
 				importFile importPath #noPrompt using:colladaImporter[1]
 				
-				RTWColladaTools_CheckMaterialName false -- converts IWTE stuff to ##
+				RTWColladaTools_CheckMaterialName false undefined -- converts IWTE stuff to ##
 				
 				if($EnvironmentAmbientLight != undefined) then
 				(
@@ -315,13 +639,19 @@ utility RTWColladaTools "RTW Collada Tools"
 	-- Save current scene as Collada
 	on exportScene pressed do
 	(		
+		local selectionClone = for sel in selection collect sel
 		local allBigObjects = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
 		if(allBigObjects == undefined or allBigObjects.count == 0) then
 		(
 			messageBox "There are no meshes in this scene!" title:"Error!"
 			return null
 		)
-		
+		local ignoreFrozen = exportIgnoresFrozen.checked
+		if(ignoreFrozen) then
+		(
+			allBigObjects = for obj in allBigObjects where not (obj.isFrozen) collect obj
+		)
+
 		local ignoreBoneCheck = exportIgnoreBones.checked
 		if(ignoreBoneCheck == false) then
 		(
@@ -338,6 +668,14 @@ utility RTWColladaTools "RTW Collada Tools"
 			)
 			print ("Bone Check: Current Scene has " + boneCount as string + " bones.")
 		)
+
+		local noCull = noCullBox.checked
+		local noCullArr = #()
+		if(noCull) then
+		(
+			noCullArr = RTWColladaTools_GetNoCullTextures ignoreFrozen
+		)
+		local changeMatNames = changeMaterialNamesBox.checked
 		
 		print "Starting collada export..."
 		
@@ -366,21 +704,26 @@ utility RTWColladaTools "RTW Collada Tools"
 		else
 		(
 			print ("Found valid OpenCollada exporter: " + colladaExporter[1] as string)
-			fileName = getSaveFileName caption:"Export openCOLLADA file" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ExportFile" filename:sceneName
+			fileName = getSaveFileName caption:"Export openCOLLADA file" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ExportFile" filename:(toLower sceneName)
 			if(fileName != undefined) then 
 			(
 				ePath = (getFilenamePath fileName) + getFilenameFile fileName + ".dae";
 				Print("Exporting file: " + ePath as string + ".dae")
-				RTWColladaTools_CheckMaterialName true
-				exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1]
-				RTWColladaTools_CheckMaterialName false
+				RTWColladaTools_CheckMaterialName true noCullArr changeMatNames ignoreFrozen
+				
+				select allBigObjects
+				exportFile ePath #noPrompt selectedOnly:true using:colladaExporter[1]
+				RTWColladaTools_CheckMaterialName false noCullArr changeMatNames ignoreFrozen
+				deselect allBigObjects
+				select selectionClone
 			)
 		)
 	)
 	
 	group "Multi Lods:"
 	(
-		label exptLabel1 "Min. amount of vertices"
+		checkbox skipLodOne "Skip LOD1" width:130 height:15 checked:true tooltip:"IWTE automatically creates a LOD1 when the LOD0 contains multiple vertex per bone weighting. So when you have this checked, the tool will skip LOD1 export."
+		label exptLabel1 "Min. vertices threshold"
 		label exptLabel2 "to apply ProOptimizer:"
 		spinner minVertexAmount "" width:50 height:20 align:#center type:#integer range:[0, 100000, 150]
 		radiobuttons objectMode labels:#("Skinned", "Static (Building)")
@@ -494,6 +837,15 @@ utility RTWColladaTools "RTW Collada Tools"
 			sceneName = ""
 		)
 
+		local noCull = noCullBox.checked
+		local noCullArr = #()
+		if(noCull) then
+		(
+			noCullArr = RTWColladaTools_GetNoCullTextures false
+		)
+		
+		local changeMatNames = changeMaterialNamesBox.checked
+		
 		lastpath = getINISetting maxini "MAXHistoryList" "History_00"
 		local colladaExporter = for o in exporterPlugin.classes where (o as string == "OpenCOLLADAExporter" ) collect o
 		if(colladaExporter.count == 0) then 
@@ -504,18 +856,24 @@ utility RTWColladaTools "RTW Collada Tools"
 		else
 		(
 			print ("Found valid OpenCollada exporter: " + colladaExporter[1] as string)
-			fileName = getSaveFileName caption:"Choose your directory and enter your model name (without the _lod0)!" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ExportFile" filename:sceneName
+			fileName = getSaveFileName caption:"Choose your directory and enter your model name (without the _lod0)!" types:"OpenCOLLADA(*.DAE)|*.DAE" historyCategory:"ExportFile" filename:(toLower sceneName)
 			if(fileName != undefined) then 
 			(
-				RTWColladaTools_CheckMaterialName true
+				RTWColladaTools_CheckMaterialName true noCullArr changeMatNames false
 				for i = 0 to 3 do
 				(
-					ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + i as string + ".dae";
+					local lodInt = i
+					if(skipLodOne.checked and i > 0) then
+					(
+						lodInt = lodInt + 1
+					)
+					ePath = (getFilenamePath fileName) + getFilenameFile fileName + "_lod" + lodInt as string + ".dae";
+					print ("Generating LOD " + lodInt as string +"...")
 					case i of
 					(
 						0:
 						(
-							print "Generating LOD0..."
+							--print "Generating LOD0..."
 							for curr in allBigObjects do
 							(
 								print ("Standard amount vertices in object " + curr.name as string + ": " + getNumVerts curr as string)
@@ -524,57 +882,14 @@ utility RTWColladaTools "RTW Collada Tools"
 						1:
 						(
 							-- Only add the modifier to the lod1 (to speed up things)
-							print "Generating LOD1..."
-							for i = 1 to allBigObjects.count do
+							for b = 1 to allBigObjects.count do
 							(
-								curr = allBigObjects[i]
-								numVerts = getNumVerts clones[i]
-								select curr
-								max modify mode
-								for i=1 to numVerts do 
-								(
-									boneArray = #()
-									weightArray = #()
-									newWeightArray = #()
-									newBoneArray = #()
-									if(isBuilding == false) then -- Modify skin stuff
-									(
-										boneArrayCount = skinOps.GetVertexWeightCount curr.modifiers[#Skin] i
-										if(boneArrayCount > 1) then -- Only if a vertex has multiple bones
-										(
-											highestWeight = 0.0
-											currBoneIndex = 0
-											for k=1 to boneArrayCount do
-											(
-												-- get bones index and weights
-												boneIndex = skinOps.GetVertexWeightBoneID curr.modifiers[#skin] i k
-												boneWeight = skinOps.GetVertexWeight curr.modifiers[#skin] i k
-												if(boneWeight > highestWeight) then
-												(
-													currBoneIndex = boneIndex
-													highestWeight = boneWeight
-												)
-												append boneArray boneIndex
-												append weightArray boneWeight
-											)
-											for p in boneArray do
-											(
-												if p == currBoneIndex then
-												(
-													append newBoneArray p
-													append newWeightArray 1.0 -- Set the bone to 1.0
-												)
-												else
-												(
-													append newBoneArray p
-													append newWeightArray 0.0
-												)
-											)
-											skinOps.SetVertexWeights curr.modifiers[#Skin] i newBoneArray newWeightArray
-										)
-									)
-								)
+								curr = allBigObjects[b]
+								RTWColladaTools_SetVertexWeightToSingleBone curr false
+								numVerts = getNumVerts clones[b]
 								
+								max modify mode
+								select curr
 								if (numVerts > minVA) then
 								(
 									print ("Added ProOptimizer modifier to " + curr.name as string)
@@ -603,11 +918,11 @@ utility RTWColladaTools "RTW Collada Tools"
 						)
 						2:
 						(
-							print "Generating LOD2..."
-							for i = 1 to allBigObjects.count do
+							--print "Generating LOD2..."
+							for b = 1 to allBigObjects.count do
 							(
-								curr = allBigObjects[i]
-								numVerts = getNumVerts clones[i]
+								curr = allBigObjects[b]
+								numVerts = getNumVerts clones[b]
 								if (numVerts > minVA) then
 								(
 									max modify mode
@@ -620,27 +935,36 @@ utility RTWColladaTools "RTW Collada Tools"
 						)
 						3:
 						(
-							print "Generating LOD3..."
-							for i = 1 to allBigObjects.count do
+							if(skipLodOne.checked == false) then
 							(
-								curr = allBigObjects[i]
-								numVerts = getNumVerts clones[i]
-								if (numVerts > minVA) then
+								--print "Generating LOD3..."
+								for b = 1 to allBigObjects.count do
 								(
-									max modify mode
-									select curr
-									$.modifiers[#ProOptimizer].VertexPercent = 20
-									print ("Reduced vertices of object " + curr.name as string + " to " + getNumVerts curr as string)
-									deselect curr
+									curr = allBigObjects[b]
+									numVerts = getNumVerts clones[b]
+									if (numVerts > minVA) then
+									(
+										max modify mode
+										select curr
+										$.modifiers[#ProOptimizer].VertexPercent = 20
+										print ("Reduced vertices of object " + curr.name as string + " to " + getNumVerts curr as string)
+										deselect curr
+									)
 								)
 							)
 						)
-					)	
+					)
 					Print("Done!")				
-					Print("Exporting file: " + ePath as string + ".dae")
-					exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1]
+					if(skipLodOne.checked and i == 3) then
+					(
+						print("Skipped exporting last lod")
+					) else
+					(
+						print("Exporting file: " + ePath as string + ".dae")
+						exportFile ePath #noPrompt selectedOnly:false using:colladaExporter[1]
+					)
 				)
-				RTWColladaTools_CheckMaterialName false
+				RTWColladaTools_CheckMaterialName false undefined changeMatNames false
 			)
 		)
 		print ("Using clones...")
@@ -655,5 +979,33 @@ utility RTWColladaTools "RTW Collada Tools"
 			clones[i].ishidden=false
 		)
 		print ("All LODS Exported!")
+	)
+	
+	group "Misc:"
+	(
+		checkbox deleteUnusedBonesSkin "Del. Unweighted" width:130 height:15 checked:true tooltip:"When checked, removes every bone that has no weight from the skin table."
+		button setSingleWeight "Skin Single Weight" width:130 height:30 tooltip:"For every Editable_Mesh with a Skin modifier, sets the weight to single bone only."
+	)
+	
+	-- Set single bone weight
+	on setSingleWeight pressed do
+	(
+		local allMeshes = for b in objects where (classOf b == Editable_Mesh and (b.isHidden == false))  collect b
+		if(allMeshes == undefined or allMeshes.count == 0) then
+		(
+			messageBox "There are no (visible) meshes in this scene!" title:"Error!"
+			return null
+		)
+		
+		-- Main fun
+		for i = 1 to allMeshes.count do
+		(
+			local curr = allMeshes[i]
+			local continueFor = RTWColladaTools_SetVertexWeightToSingleBone curr deleteUnusedBonesSkin.checked
+			if(continueFor == false) then
+			(
+				return false
+			)
+		)
 	)
 )
