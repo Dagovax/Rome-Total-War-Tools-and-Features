@@ -67,9 +67,10 @@ The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resour
 
 ## Change Log
 ***Version 1.0.20***
+- Upgraded to .NET 8.0. **You need to install the new Desktop Runtime**!
 - A lot of code quality improvements, making my life easier.
 - Moved all event handlers to on Form Load, fixing some errors
-- Added **Tools -> Text Files -> ** which will convert .txt to .strings and other way around
+- Added **Tools -> Text Files ->** which will convert .txt to .strings and other way around
 - Integrated slave resource generator tool, and updated it to work with this tool. They will now be checked using `map_ground_types.tga` and `map_features.tga`. If no valid spot is found, default to settlement
 - Added region name to hover information in top right
 - `map_snow.tga` is now also parsed and viewable if present in campaign folder. Corresponding menu settings added too.
