@@ -1,11 +1,11 @@
 # Rome: Total War - Campaign Tools
-A .NET 6 Windows application that validates campaign files and shows region information
+A .NET 8 Windows application that validates campaign files and shows region information
 
 
 ## Installation
 [Download](https://github.com/Dagovax/Rome-Total-War-Tools-and-Features/tree/master/RTW.CampaignTools) one of the <i>RTW.CampaignTools</i> executables.<br/>
 
-Make sure you have <B>.NET Desktop Runtime 6.0.xx </B> installed: You can find that [here](https://dotnet.microsoft.com/en-us/download/dotnet/6.0).
+Make sure you have <B>.NET Desktop Runtime 8.0.xx </B> installed: You can find that [here](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
 - If you downloaded <b>RTW.CampaignTools (32-bit).exe</b>, download the <b><u>x86</u></b> version
 - If you downloaded <b>RTW.CampaignTools (64-bit).exe</b>, download the <b><u>x64</u></b> version
 
