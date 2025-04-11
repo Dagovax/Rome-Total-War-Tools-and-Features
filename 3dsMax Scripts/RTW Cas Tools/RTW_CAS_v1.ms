@@ -20,11 +20,23 @@
 -- v1.1 -- Added Grasp/Release; animation frames   --
 -- v1.2 -- Fixed errors due to scripts having duplicate functions   --
 -- v1.3 -- Fixed rotation quat issue and doubled distance values during export --
+-- v1.4 -- Added switch option for animation import: Euler XYZ or default TCB. Note that the export always converts it back to TCB (which is game format)
+-- v1.5 -- Added copy/paste animation frames
+-- v1.6 -- Fixed some errors when writing animation cas files: double distance values were incorrect, as well as total distance traveled. Also fixed wrong positioning of root bone in export (glitchy anim on strat map)
 ----------------------------------------------------------
 
 global useLog = true
 global memoryBones = #()
 global graspWarning = false
+
+function RTWCas_ReplaceSpaceWithUnderscore inputString = 
+(
+	for i = 1 to inputString.count where (findstring inputString[i] " ") != undefined do 
+	(
+		inputString[i] = "_"
+	) 
+	return inputString
+)
 
 -- Get the root NODE (not bone!), either Armature or Scene Root depending on imported file
 function RTWCas_GetRootNode =
@@ -45,14 +57,33 @@ function RTWCas_GetRootNode =
 	return armature
 )
 
+-- Check if object has a root node parent with a name
+function RTWCas_IsChildOfRootNode boner rNode =
+(
+	if(boner == undefined or rNode == undefined) then
+	(
+		return false
+	)
+	local parentBone = boner
+	while(parentBone.parent != undefined) do
+	(
+		parentBone = parentBone.parent
+	)
+	if(parentBone.name == rNode.name) then
+	(
+		return true
+	)
+	return false
+)
+
 -- Return a list of bones (without Armature/Scene Root)
 function RTWCas_GetBones =
 (
 	local armature = RTWCas_GetRootNode()
 	if(armature != undefined) then
 	(
-		local dummies = for t in objects where (classOf t == Dummy and t.name != armature.name and t.parent != undefined) collect t
-		local pointers = for t in objects where (classOf t == Point and t.name != armature.name and t.parent != undefined) collect t
+		local dummies = for t in objects where (classOf t == Dummy and t.name != armature.name and t.parent != undefined and not isGroupHead t and (RTWCas_IsChildOfRootNode t armature)) collect t
+		local pointers = for t in objects where (classOf t == Point and t.name != armature.name and t.parent != undefined and not isGroupHead t and (RTWCas_IsChildOfRootNode t armature)) collect t
 		if (dummies == undefined or dummies.count == 0) then
 		(
 			if(pointers == undefined or pointers.count == 0) then
@@ -78,12 +109,85 @@ function RTWCas_SceneIsCollada =
 	return true
 )
 
+function RTWCas_GetSkinnedObjectPosition obj frame =
+(
+	if (frame < 0) then
+	(
+		local meshCopy = snapshot obj
+		local vertCount = meshCopy.numVerts
+		
+		if vertCount == 0 then
+        (
+            return undefined -- No vertices found
+        )
+        
+        local center = [0, 0, 0]
+        
+        -- Sum all vertex positions
+        for i = 1 to vertCount do
+        (
+            center += getVert meshCopy i
+        )
+        
+        -- Compute average position (center of the deformed mesh)
+        center /= vertCount
+        
+        -- Delete the snapshot mesh
+        delete meshCopy
+        
+		center[1] -= obj.position[1]
+		center[2] -= obj.position[2]
+		center[3] -= obj.position[3]
+		
+        return center
+	)
+	else
+	(
+		at time frame
+		(
+			local meshCopy = snapshot obj  -- Get the deformed mesh at the specified frame
+			local vertCount = meshCopy.numVerts
+			
+			if vertCount == 0 then
+			(
+				return undefined -- No vertices found
+			)
+			
+			local center = [0, 0, 0]
+			
+			-- Sum all vertex positions
+			for i = 1 to vertCount do
+			(
+				center += getVert meshCopy i
+			)
+			
+			-- Compute average position (center of the deformed mesh)
+			center /= vertCount
+			
+			-- Delete the snapshot mesh
+			delete meshCopy
+			
+			local pivotX = obj.position[1]
+			local pivotY = obj.position[2]
+			local pivotZ = obj.position[3]
+			
+			-- Correct relative to the object's pivot
+			return center
+		)
+	)
+)
+
 function RTWCas_RoundFloat val dp = --rounds a float to a set number of decimal places
 (
 	a = val * (10^dp)
 	b = a as integer
 	a = b as float / (10^dp)
 	return a
+)
+
+function RTWCas_QuatDot q1 q2 =
+(
+	return q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w
 )
 
 function RTWCas_ReverseString inString = (
@@ -132,6 +236,10 @@ function RTWCas_IntToBinary inInt =
 function RTWCas_FormatFloatValue val zeroes = 
 (
 	tempzeros = "000000000000"
+	if(val == undefined) then
+	(
+		return "undefined"
+	)
 	if (val > -0.0001) and (val < 0.0001) then
 	(
 		val = 0.0
@@ -156,6 +264,25 @@ function RTWCas_FormatFloatValue val zeroes =
 	(
 		val = " 0.0"
 	)
+	return val
+)
+
+function RTWCas_FormatIntValue val padding =
+(
+	if(val == -0) then
+	(
+		val = 0
+	)
+	
+	local offset = padding - (val as string).count
+	if(offset > 0) then
+	(
+		for i=1 to offset do
+		(
+			val = " " + (val as string)
+		)
+	)
+	
 	return val
 )
 
@@ -207,6 +334,49 @@ function RTWCas_WriteVector fp outVec =
 	WriteFloat fp outVec.z
 )
 
+-- Store Initial Pivot Offset (before animation)
+function RTWCas_StorePivotOffset obj =
+(
+	if(obj == undefined) then
+	(
+		return false
+	)
+	local vert = getVert obj 1 -- get the first vert
+	local offset = in coordsys world vert - obj.position
+	
+	local propValue = ""
+	for i = 1 to 3 do
+	(
+		propValue = propValue + "%" + offset[i] as string
+	)
+	setUserProp obj "VertexToPivot" propValue
+)
+
+-- Compute New Pivot Position per Frame
+function RTWCas_ComputePivotPosition obj frame =
+(
+	if(obj == undefined) then
+	(
+		return false
+	)	
+	local propValue = getUserProp obj "VertexToPivot"
+	if propValue != undefined then
+	(
+		local offset = filterString propValue "%"
+		local pivotOffset = point3 (offset[1] as float) (offset[2] as float) (offset[3] as float)
+		at time frame
+		(
+			local meshCopy = snapshot obj -- get deformed mesh
+			local firstVert = getVert meshCopy 1 -- get first vertex position
+			delete meshCopy
+			
+			-- Compute new pivot position
+			local newPivot = firstVert - pivotOffset
+			return newPivot
+		)
+	)
+)
+
 -- Set the original parent offset
 function RTWCas_SetBoneUserParentProperty boner override =
 (
@@ -254,7 +424,7 @@ function RTWCas_GetBoneUserParentProperty boner =
 )
 
 -- Check if input bone has valid position controller
-function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd =
+function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd forceNoTranslation =
 (
 	if(boneIdx == undefined) then
 	(
@@ -269,6 +439,11 @@ function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd =
 	(
 		return true -- Always add first bone
 	)
+	if(forceNoTranslation) then
+	(
+		return false -- Now every other bone should return false. Only first bone should have it!
+	)
+	
 	local initialPos = RTWCas_GetBoneUserParentProperty boneIdx
 	local forcePosition = getUserProp boneIdx "ForcePosition"
 	if (forcePosition != undefined) then
@@ -305,9 +480,9 @@ function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd =
 )
 
 -- Return count of bones that have a valid position controller
-function RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd =
+function RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd forceNoTranslation =
 (
-	if(boneList == undefined) then
+	if(boneList == undefined or forceNoTranslation) then
 	(
 		return 1 -- we always need 1 bone.. Root bone has position
 	)
@@ -319,7 +494,7 @@ function RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd =
 			counter += 1
 		) else
 		(
-			if ((RTWCas_BoneHasPositionController b frameStart frameEnd) == true) then
+			if ((RTWCas_BoneHasPositionController b frameStart frameEnd forceNoTranslation) == true) then
 			(
 				counter += 1
 			)	
@@ -344,13 +519,886 @@ function RTWCas_GetEndFrame =
 	return [(animationRange.start + 1), animationRange.end, animationRange.end]
 )
 
+-- Loops trough every frame and converts Euler_XYZ rotation controller to TCB which is required by RTW engine. Returns true when sucessfull convertion
+function RTWCAS_EulerToQuat b numFrames =
+(
+	if(b == undefined) then
+	(
+		return false
+	)
+	if((classOf b.rotation.controller) == Euler_XYZ) then
+	(
+		local animSet = #()	
+		for k = 1 to numFrames do animate on in coordsys b.parent
+		(
+			--local frameRotX = at time k b[3][2].rotation.x
+			--local frameRotY = at time k b[3][2].rotation.y
+			--local frameRotZ = at time k b[3][2].rotation.z
+			local frameRotX = at time k b.rotation.controller.x_rotation
+			local frameRotY = at time k b.rotation.controller.y_rotation
+			local frameRotZ = at time k b.rotation.controller.z_rotation
+			
+			--local frameRotW = at time k b[3][2].rotation.w
+			local localXZYW = #()
+			append localXZYW frameRotX
+			append localXZYW frameRotZ
+			append localXZYW frameRotY
+			--append localXZYW frameRotW
+			append animSet localXZYW
+		)
+		b.rotation.controller = TCB_Rotation()
+		b.rotation.controller.rotWindup = true
+		deletekeys b.rotation.controller #allKeys
+		for k = 1 to numFrames do animate on in coordsys b.parent
+		(
+			local localXZYW = animSet[k]
+			addnewkey b.rotation.controller k
+			local frameRotX = localXZYW[1]
+			local frameRotY = localXZYW[2]
+			local frameRotZ = localXZYW[3]
+			--local frameRotW = localXZYW[4]
+			local objRot = eulerAngles frameRotX frameRotY frameRotZ
+			--local quatFound = quat (frameRotX) (frameRotY) (frameRotZ)  ( frameRotW ) -- animate bone
+			local quatCalc = EulerToQuat objRot
+			local quatInverse = (inverse quatCalc)
+			-- MAXScript's implementation of quaternions is slightly problematic. The biggest issue is that a quaternion will rotate a vector clockwise around an axis while it will rotate a geometric object counterclockwise around an axis
+			
+			
+			
+			--print quatFound
+			--print quatCalc
+			at time k b[3][2].rotation = quatInverse
+		)
+		return true
+	)
+	return false
+)
+
+function RTWCas_GetPath bLeaveLastSlash inString =
+(
+	lastSlash=0
+	outString=""
+	for i=1 to inString.count do 
+	(
+		if(inString[i]=="\\") then
+		(
+			lastSlash=i
+		)
+	)
+	if (bLeaveLastSlash) then 
+	(
+		lastSlash-=1
+	)
+	for i=1 to lastSlash do
+	(
+		outString += inString[i]
+	)
+	return outString
+)
+
+-- Get texture path
+function RTWCas_GetTexturePath textureName filePath = 
+(
+	if((findString textureName "textures") == undefined) then 
+	(
+		textureName = "\\textures" + textureName
+	)
+	local bAlreadySlash= textureName[1]=="\\"
+	if(((findString textureName ".dds") == undefined) or ((findString textureName ".DDS") == undefined)) then
+	(
+		textureName +=".dds"
+	)
+	local directory = RTWCas_GetPath bAlreadySlash filePath
+	-- now check if directory ends with certain sections from settlement overlays etc. Makes life easier for us right?
+	if((findString directory "\\settlement_plans\\overlays\\") != undefined) then
+	(
+		directory = substituteString directory "\\settlement_plans\\overlays\\" "\\models_building\\"
+	)
+	if((findString directory "\\settlement_plans\\slot_overlays\\") != undefined) then
+	(
+		directory = substituteString directory "\\settlement_plans\\slot_overlays\\" "\\models_building\\"
+	)
+	if((findString directory "\\models_building\\models_spot\\") != undefined) then
+	(
+		directory = substituteString directory "\\models_building\\models_spot\\" "\\models_building\\"
+	)
+	if((findString directory "\\models_building\\models_walls\\") != undefined) then
+	(
+		directory = substituteString directory "\\models_building\\models_walls\\" "\\models_building\\"
+	)
+	if((findString directory "\\models_building\\info\\info_walls\\") != undefined) then
+	(
+		directory = substituteString directory "\\models_building\\info\\info_walls\\" "\\models_building\\"
+	)
+	if((findString directory "\\models_building\\info\\") != undefined) then
+	(
+		directory = substituteString directory "\\models_building\\info\\" "\\models_building\\"
+	)
+	if not bAlreadySlash and (directory[directory.count]!="\\") then 
+	(
+		directory+="\\"
+	)
+	local fullName = directory + (textureName)
+	return fullName
+)
+
+-- Replaces every space w ith double underscores. Good for IWTE usage
+function RTWCas_ReplaceSpaceWithDoubleUnderscore inString =
+(
+	return substituteString inString " " "__"
+)
+
+-- Replaces every double unscore to space. From IWTE
+function RTWCas_ReplaceDoubleUnderscoreWithSpace inString =
+(
+	return substituteString inString "__" " "
+)
+
+-- STRUCTS section
+struct CASHEADER 
+(
+	-- Start header
+	casFileVersion, -- float
+	chunkSize, -- long
+	chunkTypeId, -- long
+	longFiller1, -- long 0
+	animationLength, -- float
+	floatFiller1, -- float 0.0
+	variableByteValuesSet1, -- array of 3 bytes
+	integerFiller1, -- int
+	integerFiller2, -- int
+	variableByteValuesSet2, -- array of 3 bytes
+	
+	-- Read Cas Header
+	function Read casFile logFile =
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		
+		casFileVersion = ReadFloat casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# cas file version\t\t\t\t\t\t\t%\n" casFileVersion (RTWCas_GetPointerPosition casFile) to:logFile
+			format " # ------------------------------------------------------------------- \n" to:logFile
+		)
+		chunkSize = ReadLong casFile
+		chunkTypeId = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t\t\t# chunksize, chunktypeid expect 38 9\t\t%\n" chunkSize chunkTypeId (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		longFiller1 = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# expect long filler 0\t\t\t\t\t\t%\n" longFiller1 (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		animationLength = ReadFloat casFile
+		if(writeLog == true) then
+		(
+			format "\t%\t\t\t\t\t\t\t\t\t\t\t\t# animation length\t\t\t\t\t\t\t%\n" animationLength (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		local oneIntegerFiller = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# expect one integer fillers 1 normally\t\t%\n" oneIntegerFiller (RTWCas_GetPointerPosition casFile) to:logFile
+		)	
+		floatFiller1 = ReadFloat casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# expect float filler 0.0\t\t\t\t\t%\n" floatFiller1 (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		variableByteValuesSet1  = #()
+		append variableByteValuesSet1 (ReadByte casFile)
+		append variableByteValuesSet1 (ReadByte casFile)
+		append variableByteValuesSet1 (ReadByte casFile)
+		if(writeLog == true) then
+		(
+			format "%  %  %\t\t\t\t\t\t\t\t\t\t\t\t\t# first set of three variable byte values\t%\n" variableByteValuesSet1[1] variableByteValuesSet1[2] variableByteValuesSet1[3] (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		integerFiller1 = ReadLong casFile
+		integerFiller2 = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t\t\t# expect two integer fillers 1 0\t\t\t%\n" integerFiller1 integerFiller2 (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		variableByteValuesSet2  = #()
+		append variableByteValuesSet2 (ReadByte casFile)
+		append variableByteValuesSet2 (ReadByte casFile)
+		append variableByteValuesSet2 (ReadByte casFile)
+		if(writeLog == true) then
+		(
+			format "%  %  %\t\t\t\t\t\t\t\t\t\t\t\t\t# second set of three variable byte values\t%\n" variableByteValuesSet2[1] variableByteValuesSet2[2] variableByteValuesSet2[3] (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		return true
+	)
+)
+
+-- RTW Bone
+struct RTWBONE
+(
+	stringLength, -- number of bytes
+	boneName, -- bone Name
+	quatFrames,
+	positionFrames,
+	quatOffset,
+	positionOffset,
+	fillerZero,
+	strSize, --usally 1, extra number of bytes and bone string data from 3dsmax
+	position, -- point3
+	
+	-- Reads a bone data
+	function Read casFile logFile =
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		if(writeLog == true) then
+		(
+			format " # ------------------------------------------------------------------- \n" to:logFile
+		)
+		stringLength = ReadLong casFile
+		boneName = ReadString casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t# number of bytes and bone name\t\t\t\t%\n" stringLength boneName (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		quatFrames = ReadLong casFile
+		positionFrames = ReadLong casFile
+		quatOffset = ReadLong casFile
+		positionOffset = ReadLong casFile
+		fillerZero = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %  %  %  %\t\t\t\t\t\t\t\t\t\t\t# five ints - quatframes, positionframes, quatoffset, positionoffset, fillerzero %\n" quatFrames  positionFrames quatOffset positionOffset fillerZero (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		strSize = ReadLong casFile
+		fseek casFile strSize  #seek_cur
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# extra number of bytes and bone string data from 3dsmax %\n" strSize (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		position = RTWCas_RTWToMaxVector( point3 (ReadFloat casFile) (ReadFloat casFile) (ReadFloat casFile) ) true
+		if(writeLog == true) then
+		(
+			format "\t%\t%\t%\t\t# pose xyz \t\t\t\t\t\t\t\t\t%\n" (RTWCas_FormatFloatValue position.x 10) (RTWCas_FormatFloatValue position.y 10) (RTWCas_FormatFloatValue position.z 10) (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		if(writeLog == true) then
+		(
+			format " # -------------------------  End of bone %   ----------------------------  \n" boneName to:logFile
+		)
+		
+	)
+)
+
+-- Bone Chunk struct
+struct BONECHUNK
+(
+	-- Start mesh bone chunk
+	vectorBones,
+	chunkSize, -- long
+	chunkTypeId, -- long (expect 0)
+	numBones, -- two byte int
+	boneList, -- bone hierarchy list
+	numFrames, -- number of time frames in animation
+	timeFrames, -- list of time frames
+	
+	-- Read bone chunk
+	function Read casFile logFile =
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		chunkSize = ReadLong casFile
+		chunkTypeId = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t\t\t# chunksize, chunktypeid expect type 0t\t\t%\n" chunkSize chunkTypeId (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numBones = ReadShort casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of bones as two byte int\t\t\t%\n" numBones (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		local boneHierarchy = #()
+		for i=1 to numBones do
+		(
+			append boneHierarchy (ReadLong casFile)
+		)
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# bone hierarchy list\t\t\t\t\t\t%\n" (boneHierarchy as string) (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numFrames = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of time frames in animation\t\t%\n" numFrames (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		timeFrames = #()
+		for i = 1 to numFrames do
+		(
+			local timeFrame = ReadFloat casFile
+			append timeFrames timeFrame
+		)
+		if(timeFrames.count > 0) then
+		(
+			if(writeLog == true) then
+			(
+				for t in timeFrames do
+				(
+					format "%\t" (RTWCas_FormatFloatValue t 4) to:logFile
+				)
+				format "# list of time frames\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+		)
+		
+		-- Read bone data
+		vectorBones = #()
+		for i=1 to numBones do
+		(
+			tmpBone = RTWBONE 0
+			tmpBone.Read casFile logFile
+			append vectorBones tmpBone
+		)
+	)
+)
+
+struct RTWMESH
+(
+	isTextured, --read textureverts?
+	isColored, --read vertex colors?
+	readVertexAssign, --bool, wheter to read vertex assignments
+	verts, --array of point3 floats
+	normals, -- array of point3 floats
+	faces, -- array of point3 floats
+	textureId, -- which texture does it use?
+	uvw, -- array of point3 floats
+	vertexQuatByte, -- vertex color information
+	
+	function Read casFile logFile numVerts numFaces =
+	(
+		verts = #()
+		normals = #()
+		faces = #()
+		uvw = #()
+		vertexQuatByte = #()
+		
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		
+		--if(readVertexAssign) then
+		--(
+		--)
+		
+		-- Read all vertex position data
+		for i=1 to numVerts do
+		(
+			local posX = ReadFloat casFile
+			local posZ = ReadFloat casFile
+			local posY = ReadFloat casFile
+			local pos = RTWCas_RTWToMaxVector( point3 (posX) (posZ) (posY) ) true
+			append verts pos
+			if(writeLog == true) then
+			(
+				format "%\t%\t%\t\t\t# cas mesh vertex position xyz values\t\t%\n" (RTWCas_FormatFloatValue posX 10) (RTWCas_FormatFloatValue posZ 10) (RTWCas_FormatFloatValue posY 10)  (i-1) to:logFile
+			)
+		)
+		if(writeLog == true) then
+		(
+			format " # -------------------------  end vertices position data   ----------------------------  %\n" (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		-- Read all vertex normal data
+		for i=1 to numVerts do
+		(
+			local normalX = ReadFloat casFile
+			local normalZ = ReadFloat casFile
+			local normalY = ReadFloat casFile
+			local normal = RTWCas_RTWToMaxVector( point3 (normalX) (normalZ) (normalY) ) true
+			append normals normal
+			if(writeLog == true) then
+			(
+				format "%\t%\t%\t\t\t# cas mesh vertex normal xyz values\t\t\t%\n" (RTWCas_FormatFloatValue normalX 10) (RTWCas_FormatFloatValue normalZ 10) (RTWCas_FormatFloatValue normalY 10)  (i-1) to:logFile
+			)
+		)
+		if(writeLog == true) then
+		(
+			format " # -------------------------  end vertices normal data   ----------------------------  %\n" (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		-- Read faces (tirangles)
+		for i=1 to numFaces do
+		(
+			local indexX = ReadShort casFile #unsigned
+			local indexY = ReadShort casFile #unsigned
+			local indexZ = ReadShort casFile #unsigned
+			append faces (point3 (indexZ+1) (indexY+1) (indexX+1))
+			if(writeLog == true) then
+			(
+				format "\t% \t% \t%\t\t\t# cas mesh vertex triangle indexes\t\t\t%\n" (RTWCas_FormatIntValue indexX 3) (RTWCas_FormatIntValue indexY 3) (RTWCas_FormatIntValue indexZ 3)  (i-1) to:logFile
+			)
+		)
+		if(writeLog == true) then
+		(
+			format " # -------------------------  end triangles data   ----------------------------  %\n" (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		textureId = (ReadLong casFile) -- 0 based!
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t# texture reference number (int)\t\t\t\t%\n" textureId (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		-- Read UVW coordinates
+		if(isTextured != 0) then
+		(
+			for i=1 to numVerts do
+			(
+				local coordU = ReadFloat casFile
+				local coordV = ReadFloat casFile
+				if(writeLog == true) then
+				(
+					format "%\t%\t# cas texture vertex uv values\t\t%\n" (RTWCas_FormatFloatValue coordU 10) (RTWCas_FormatFloatValue coordV 10)  (i-1) to:logFile
+				)
+				append uvw ((point3 (coordU) (1.0-(coordV)) 0.0))
+			)
+		)
+		if(writeLog == true) then
+		(
+			format " # -------------------------  end UV data   ----------------------------  %\n" (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		if(isColored != 0) then
+		(
+			for i=1 to numVerts do
+			(
+				local colorR = ReadByte casFile #unsigned
+				local colorG = ReadByte casFile #unsigned
+				local colorB = ReadByte casFile #unsigned
+				local colorAlpha = ReadByte casFile #unsigned
+				if(writeLog == true) then
+				(
+					format "\t%\t\t%\t\t%\t\t%\t\t\t\t\t\t# cas mesh vertex quad byte values\t\t%\n" (RTWCas_FormatIntValue colorR 3) (RTWCas_FormatIntValue colorG 3) (RTWCas_FormatIntValue colorB 3) (RTWCas_FormatIntValue colorAlpha 3) (i-1) to:logFile
+				)
+				local colorCombined = color colorR colorG colorB
+				local colorInfoArray = #()
+				append colorInfoArray colorCombined
+				append colorInfoArray (color colorAlpha colorAlpha colorAlpha)
+				append vertexQuatByte colorInfoArray
+			)
+		)
+		if(writeLog == true) then
+		(
+			format " # -------------------------  end vertex color quad data   ----------------------------  %\n" (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		local fillerInt = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# filler int 0\t\t\t\t%\n" fillerInt (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+	)
+)
+
+struct MESHCHUNK
+(
+	type, -- mesh chunk type
+	stringLength, -- number of bytes
+	meshName, -- Mesh Name
+	strSkip, -- possible extra byte count and name
+	strSkip2, -- number of bytes and extra mesh name
+	boneAttachIndex, -- bone index for prim, sec weapons and shield for RTW (no weights)
+	quaternian, -- quat
+	position, -- position x y z point3
+	numVerts, -- short, number of vertices
+	numFaces, -- short. number of triangles
+	isTextured, -- textured? (1) or not (0) as byte
+	isColored, -- colors?  (1) or not (0) as byte
+	meshObj, -- RTW mesh
+	createdMesh,
+	
+	function Read casFile logFile = 
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		stringLength = ReadLong casFile
+		meshName = ReadString casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t# number of bytes and mesh name\t\t\t\t%\n" stringLength meshName (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		strSkip=ReadLong casFile--length of extra string
+		fseek casFile strSkip #seek_cur
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# possible extra byte count and name\t\t%\n" strSkip (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		strSkip2=ReadLong casFile--length of extra string
+		fseek casFile strSkip2 #seek_cur
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of bytes and extra mesh name\t\t%\n" strSkip2 (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		boneAttachIndex = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# bone index for prim, sec weapons and shield for RTW (no weights)%\n" boneAttachIndex (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		-- quaternian and position
+		local quatX = ReadFloat casFile
+		local quatY = ReadFloat casFile
+		local quatZ = ReadFloat casFile
+		local quatW = ReadFloat casFile
+		local posX = ReadFloat casFile
+		local posY = ReadFloat casFile
+		local posZ = ReadFloat casFile
+		quaternian = quat (quatX) (quatY) (quatZ)  ( quatW )
+		position = RTWCas_RTWToMaxVector( point3 (posX) (posY) (posZ) ) true
+		if(writeLog == true) then
+		(
+			format "%\t%\t%\t%\t%\t%\t%\t# quaternian and position%\n" (RTWCas_FormatFloatValue quatX 10) (RTWCas_FormatFloatValue quatY 10) (RTWCas_FormatFloatValue quatZ 10) (RTWCas_FormatFloatValue quatW 10) (RTWCas_FormatFloatValue position.x 10) (RTWCas_FormatFloatValue position.y 10) (RTWCas_FormatFloatValue position.z 10) (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		numVerts = ReadShort casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of vertices (short int)\t\t\t%\n" numVerts (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numFaces = ReadShort casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of triangles (short int)\t\t\t%\n" numFaces (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		isTextured = ReadByte casFile #unsigned
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# textured? (1) or not (0) as byte\t\t\t%\n" isTextured (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		isColored = ReadByte casFile #unsigned
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# colors? (1) or not (0) as byte\t\t\t%\n" isColored (RTWCas_GetPointerPosition casFile) to:logFile
+		)		
+		
+		meshObj = RTWMESH isTextured:isTextured isColored:isColored
+		if(type==1) then meshObj.readVertexAssign = false
+		else if(type == 2) then meshObj.readVertexAssign = true
+		meshObj.Read casFile logFile numVerts numFaces
+		
+		if(writeLog == true) then
+		(
+			format " # -------------------------  End of mesh %   ----------------------------  \n" meshName to:logFile
+		)
+		
+		-- Create Mesh
+		createdMesh = mesh name:(RTWCas_ReplaceSpaceWithDoubleUnderscore meshName) vertices:meshObj.verts faces:meshObj.faces tverts:meshObj.uvw
+		defaultVCFaces createdMesh
+		
+		-- Setup texture
+		if(isTextured != 0) then
+		(
+			for k=1 to numVerts do
+			(
+				SetTVert createdMesh k meshObj.uvw[k]
+			)
+			
+			try
+			(
+				buildTVFaces createdMesh
+				local ind = 0
+				for k=1 to numFaces do
+				( 
+					ind += 1
+					SetTVFace createdMesh ind meshObj.faces[ind]
+				)
+			)
+			catch
+			(
+				MessageBox ("Problem occured building faces for object '" + createdMesh.name + "'. \nThis object probably doesn't have any vertices. Ignoring this now")   title:"Warning!" beep:false
+			)
+		)
+		
+		-- Setup vertex colors
+		if(isColored != 0) then
+		(
+			ConvertTo createdMesh Editable_Poly
+			for i=1 to numVerts do
+			(
+				polyOp.setVertColor createdMesh 0 i meshObj.vertexQuatByte[i][1]
+				polyOp.setVertColor createdMesh -2 i meshObj.vertexQuatByte[i][2] -- Alpha channel
+			)
+			ConvertTo createdMesh Editable_Mesh
+		)
+	)
+)
+
+struct GEOMETRYCHUNK
+(
+	chunkSize, -- long
+	chunkTypeId, -- long
+	numMeshGroups,
+	stringLength, -- number of bytes
+	boneName, -- bone Name
+	meshArray, -- array of meshes
+	
+	function Read casFile logFile =
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		chunkSize = ReadLong casFile
+		chunkTypeId = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t\t# chunksize, chunktypeid \t\t\t\t\t%\n" chunkSize chunkTypeId (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numMeshGroups = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t\t# number of mesh groups \t\t\t\t\t%\n" numMeshGroups (RTWCas_GetPointerPosition casFile) to:logFile
+			format " # ------------------------------------------------------------------- \n" to:logFile
+		)
+		
+		meshArray = #()
+		for i=1 to numMeshGroups do
+		(
+			tmpMesh = MESHCHUNK 0
+			tmpMesh.Read casFile logFile
+			append meshArray tmpMesh
+		)
+	)
+)
+
+struct MESHGROUPCHUNK
+(
+	chunkSize, -- long
+	chunkTypeId, -- long
+	numMeshGroups,
+	numMeshGroupsOrOtherCount,
+	
+	function Read casFile logFile =
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		chunkSize = ReadLong casFile
+		chunkTypeId = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t\t# chunksize, chunktypeid \t\t\t\t\t%\n" chunkSize chunkTypeId (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numMeshGroups = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# number of mesh groups \t\t\t\t\t%\n" numMeshGroups (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numMeshGroupsOrOtherCount = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# number of mesh groups (3.2) or other count(<3.2) eg 3.17 \t\t\t\t\t%\n" numMeshGroups (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+	)
+)
+
+struct TEXTURECHUNK
+(
+	textureIndex, -- integer
+	textureFlag, -- long
+	embeddedTga, -- byte 0 or 1
+	textureName, -- ending with null (0) byte
+	opacity, -- float (0,0-1.0)
+	ambientArray, -- array 3 floats
+	diffuseArray, -- array 3 floats
+	emissiveArray, -- array 3 floats
+	specularArray, -- array 3 floats
+	specularHighlight, --specular highlight sharpness (0.0 or 25.0) is 25 set if group 5 not 0
+	backfaceCulling, -- byte 0 or 1
+	texturePath, -- formatted path using textureName
+	
+	function Read casFile logFile casPath =
+	(
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		ambientArray = #()
+		diffuseArray = #()
+		emissiveArray = #()
+		specularArray = #()
+		
+		textureFlag = ReadLong casFile
+		local textureFlagPos = (RTWCas_GetPointerPosition casFile)
+		
+		embeddedTga = ReadByte casFile
+		local embeddedTgaPos = (RTWCas_GetPointerPosition casFile)
+		
+		textureName = ReadString casFile
+		local textureNamePos = (RTWCas_GetPointerPosition casFile)
+		texturePath = RTWCas_GetTexturePath textureName casPath
+		
+		opacity = ReadFloat casFile
+		local opacityPos = (RTWCas_GetPointerPosition casFile)
+		
+		local ambientFloatOne = ReadFloat casFile
+		local ambientFloatTwo = ReadFloat casFile
+		local ambientFloatThree = ReadFloat casFile
+		append ambientArray ambientFloatOne
+		append ambientArray ambientFloatTwo
+		append ambientArray ambientFloatThree
+		local ambientPos = (RTWCas_GetPointerPosition casFile)
+		
+		local diffuseFloatOne = ReadFloat casFile
+		local diffuseFloatTwo = ReadFloat casFile
+		local diffuseFloatThree = ReadFloat casFile
+		append diffuseArray diffuseFloatOne
+		append diffuseArray diffuseFloatTwo
+		append diffuseArray diffuseFloatThree
+		local diffusePos = (RTWCas_GetPointerPosition casFile)
+		
+		local emissiveFloatOne = ReadFloat casFile
+		local emissiveFloatTwo = ReadFloat casFile
+		local emissiveFloatThree = ReadFloat casFile
+		append emissiveArray emissiveFloatOne
+		append emissiveArray emissiveFloatTwo
+		append emissiveArray emissiveFloatThree
+		local emissivePos = (RTWCas_GetPointerPosition casFile)
+		
+		local specularFloatOne = ReadFloat casFile
+		local specularFloatTwo = ReadFloat casFile
+		local specularFloatThree = ReadFloat casFile
+		append specularArray specularFloatOne
+		append specularArray specularFloatTwo
+		append specularArray specularFloatThree
+		local specularPos = (RTWCas_GetPointerPosition casFile)
+		
+		specularHighlight = ReadFloat casFile
+		local specularHighlightPos = (RTWCas_GetPointerPosition casFile)
+		
+		backfaceCulling = ReadByte casFile
+		local backfaceCullingPos = (RTWCas_GetPointerPosition casFile)
+		
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# texture flag \t\t\t\t\t\t\t\t%\n" textureFlag textureFlagPos to:logFile
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# byte 0 or 1 (indicates embedded TGA) \t\t%\n" embeddedTga embeddedTgaPos to:logFile
+			format "%\t\t\t\t\t\t\t\t\t\t# texturename ending with null (0) byte \t\t%\n" textureName textureNamePos to:logFile
+			format "%\t\t\t\t\t\t\t\t\t\t# opacity float(0.0-1.0) \t\t\t\t\t%\n" (RTWCas_FormatFloatValue opacity 10) opacityPos to:logFile
+			format "%\t%\t%\t\t\t\t\t# ambient  floats (0.0-1.0) often all 1.0 \t%\n" (RTWCas_FormatFloatValue ambientFloatOne 6) (RTWCas_FormatFloatValue ambientFloatTwo 6) (RTWCas_FormatFloatValue ambientFloatThree 6) ambientPos to:logFile
+			format "%\t%\t%\t\t\t\t\t# diffuse  floats (0.0-1.0) often same value %\n" (RTWCas_FormatFloatValue diffuseFloatOne 6) (RTWCas_FormatFloatValue diffuseFloatTwo 6) (RTWCas_FormatFloatValue diffuseFloatThree 6) diffusePos to:logFile
+			format "%\t%\t%\t\t\t\t\t# emissive  floats (0.0-1.0) often all 0 \t%\n" (RTWCas_FormatFloatValue emissiveFloatOne 6) (RTWCas_FormatFloatValue emissiveFloatTwo 6) (RTWCas_FormatFloatValue emissiveFloatThree 6) emissivePos to:logFile
+			format "%\t%\t%\t\t\t\t\t# specular  floats (0.0-1.0) often all 0 \t%\n" (RTWCas_FormatFloatValue specularFloatOne 6) (RTWCas_FormatFloatValue specularFloatTwo 6) (RTWCas_FormatFloatValue specularFloatThree 6) specularPos to:logFile
+			format "%\t\t\t\t\t\t\t\t\t\t# specular highlight sharpness (0.0 or 25.0) is 25 set if group 5 not 0\t%\n" (RTWCas_FormatFloatValue specularHighlight 10) specularHighlightPos to:logFile
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# 1 (backface culling) or 0 (no culling) \t\t%\n" backfaceCulling backfaceCullingPos to:logFile
+		)
+	)
+)
+
+-- Main Texture section for a cas file
+struct TEXTUREHEADER
+(
+	chunkSize, -- long
+	chunkTypeId, -- long
+	numTextures, -- long
+	textures, -- array
+	
+	function Read casFile logFile casPath =
+	(
+		textures = #()
+		local writeLog = false
+		if(logFile != undefined) then
+		(
+			writeLog = true
+		)
+		chunkSize = ReadLong casFile
+		chunkTypeId = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%  %\t\t\t\t\t\t\t\t\t\t\t\t# chunksize, chunktypeid \t\t\t\t\t%\n" chunkSize chunkTypeId (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		numTextures = ReadLong casFile
+		if(writeLog == true) then
+		(
+			format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# number of textures \t\t\t\t\t\t%\n" numTextures (RTWCas_GetPointerPosition casFile) to:logFile
+		)
+		
+		if(writeLog == true) then
+		(
+			format " # ------------------------------------------------------------------- \n" to:logFile
+		)
+		
+		-- Get texture chunks
+		for t=1 to numTextures do
+		(
+			curTexture = TEXTURECHUNK textureIndex:(t-1)
+			curTexture.Read casFile logFile casPath
+			append textures curTexture
+			if(curTexture.texturePath != undefined) then
+			(
+				-- Create new material with this bitmap
+				tm = bitMapTexture()
+				tm.filename = curTexture.texturePath
+				mat = getMeditMaterial t
+				local materialName = substituteString curTexture.textureName "textures\\" "" 
+				if(mat != undefined and mat.name == materialName) then
+				(
+					mat.diffuseMap=tm
+				) else
+				(
+					mat = standardMaterial diffuseMap:tm
+					mat.name = materialName
+				)
+				
+				-- New, also check opacity
+				if(curTexture.opacity > 0.0) then
+				(
+					tm.alphasource = 2 -- None (Opaque for default texture)
+					alphaBm = bitMapTexture()
+					alphaBm.filename = curTexture.texturePath
+					alphaBm.monoOutput = 1
+					mat.opacityMap = alphaBm
+					mat.diffuseMap=tm
+				)
+				
+				try (showTextureMap mat tm on) catch ()
+				setMeditMaterial t mat
+				format "Loaded texture ID=% with name:%\n" curTexture.textureIndex curTexture.texturePath
+			)
+			if(writeLog == true) then
+			(
+				format " # -------------------------  End texture group\t\t%\t----------------------------  %\n" (t-1) (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+		)
+	)
+)
+
+-- GLOBALS
+global CasHeaderInstance = CASHEADER 0
+
 -- RTW Cas upgraded version from Dagovax
 utility RTWCasTools "RTW Cas Tools"
 (
 	group "Info:"
 	(
 		label titleLabel1 "RTW CAS Tools"
-		label titleLabel2 "v1.3" color:(color 0 20 80)
+		label titleLabel2 "v1.5" color:(color 0 20 80)
 		label empt " "
 		label titleLabel3 "Use this tool to import" color:(color 0 180 50)
 		label titleLabel4 "or export .CAS files." color:(color 0 180 50)
@@ -433,12 +1481,146 @@ utility RTWCasTools "RTW Cas Tools"
 	global animImportFrameChanged = false
 	group "Import"
 	(
-		checkbox writeImportLogCheckbox "Create import logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .importlog.txt file at the imported animation's location"
+		checkbox writeImportLogCheckbox "Create import logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .importlog.txt file at the import location."
+		button importCAS "Import CAS" width:130 height:30 tooltip:"Import .CAS Mesh"
+		label meshImportSection " === MESHES ===" height:15 tooltip:"The first section applies for importing meshes!" align:#center
+		label animationImportSection " === ANIMATIONS ===" height:15 tooltip:"The section below only applies for animation import!" align:#center
+		radiobuttons importRotationController labels:#("Euler XYZ", "TCB Rotation") width: 140 height:30 tooltip:"Import animation rotation quaternian frames using this controller. Euler XYZ is the newest and most useful when using the 'Curve Editor'"
 		button importAnimation "Import Animation" width:130 height:30 tooltip:"Import .CAS Animation"
+	)
+	
+	-- Start CAS mesh import
+	on importCAS pressed do
+	(
+		local importFileName = getOpenFileName types:"CAS (*.cas)|*.cas|"
+		if (importFileName == undefined) then
+		(
+			return null
+		)
+		
+		RTWCas_LogText("Starting Mesh Import...")
+		RTWCas_LogText("Reading mesh from file: " + (getFilenameFile importFileName))
+		
+		local logFileName = (getFilenameFile importFileName) + ".importlog.txt"
+		local logFilePath = (getFilenamePath importFileName)
+		local logFileImport = logFilePath + logFileName
+		local logFile = undefined
+		local writeLog = writeImportLogCheckbox.checked
+			
+		if(writeLog==true) then
+		(
+			logFile = openFile logFileImport mode:"wt"
+			format " # -------------------------\tMesh {%} Imported using [RTW Cas Tool] for 3ds Max by Sirrianus Dagovax\t------------------------- #\n\n" (getFilenameFile importFileName) to:logFile
+			RTWCas_LogText("Check the log file for details: " + (logFileImport as string))
+		)
+		
+		local casFile = fopen importFileName "rb"
+		
+		-- Catch all exceptions and close the files
+		try
+		(
+			-- Read cas header	
+			if not (CasHeaderInstance.Read casFile logFile) then return 1
+			if(writeLog == true) then
+			(
+				format " # =========================  End of chunk   ============================  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+			
+			-- Read bone chunk
+			boneChunk = BONECHUNK()
+			boneChunk.Read casFile logFile
+			if(writeLog == true) then
+			(
+				format " # =========================  End of chunk   ============================  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+			
+			-- Geometry Chunk. Actual meshes
+			geometryChunk = GEOMETRYCHUNK()
+			geometryChunk.Read casFile logFile
+			if(writeLog == true) then
+			(
+				format " # =========================  End of chunk   ============================  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+			
+			local indicator = ReadShort casFile
+			if(writeLog == true) then
+			(
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# indicator\t\t\t\t\t%\n" indicator (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+			
+			local numMeshGroups = ReadLong casFile
+			if(writeLog == true) then
+			(
+				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# number of mesh groups (3.2) or other count(<3.2) eg 3.17\t%\n" numMeshGroups (RTWCas_GetPointerPosition casFile) to:logFile
+				format " # =========================  End of chunk   ============================  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+			
+			-- Some more chunks based on num of meshgroups above?? Read anyway
+			for m=1 to numMeshGroups do
+			(
+				meshGroupChunk1 = MESHGROUPCHUNK()
+				meshGroupChunk1.Read casFile logFile
+				if(writeLog == true) then
+				(
+					format " # =========================  End of chunk   ============================  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+				)
+			)
+			
+			-- Read the Textures
+			textureSectionChunk = TEXTUREHEADER()
+			textureSectionChunk.Read casFile logFile importFileName
+			if(writeLog == true) then
+			(
+				format " # =========================  End of chunk   ============================  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
+			)
+			
+			-- Bind meshes to materials
+			for k=1 to geometryChunk.meshArray.count do
+			(
+				if(geometryChunk.meshArray[k].meshObj != undefined) then
+				(
+					local textureId = geometryChunk.meshArray[k].meshObj.textureId
+					if(textureId != -1) then
+					(
+						if(geometryChunk.meshArray[k].createdMesh != undefined) then
+						(
+							geometryChunk.meshArray[k].createdMesh.material = getMeditMaterial (textureId + 1)
+						)
+					)
+				)
+			)
+			
+			-- Close and finish all files used
+			if(writeLog == true) then
+			(
+				format " # +++++++++++++++++++++++++ CAS MESH IMPORT TASK END  ++++++++++++++++++++++++++++ \n" to:logFile
+				close logFile
+			)
+			fclose casFile
+		)
+		catch
+		(
+			-- Close
+			if(writeLog == true) then
+			(
+				format " # -------------------------  MESH IMPORT FAILED WITH ERROR  ---------------------------- \n=> %\n" (getCurrentException())  to:logFile
+				close logFile
+			)
+			fclose casFile
+			throw()
+		)
+		redrawViews() 	
+		print("Mesh Import -> Completed")
 	)
 	
 	on importAnimation pressed do
 	(	
+		local importAsEuler = false
+		if importRotationController.state == 1 then
+		(
+			importAsEuler = true
+		)
+		
 		-- Then check if Armature is present, thus rootbone
 		local armature = RTWCas_GetRootNode()
 		local isCollada = RTWCas_SceneIsCollada()
@@ -537,6 +1719,7 @@ utility RTWCasTools "RTW Cas Tools"
 			for b in boneList do
 			(
 				b.rotation.controller = TCB_Rotation()
+				b.rotation.controller.rotWindup = true
 			)
 			local boneVecs = #()
 			for k = 1 to numFrames do
@@ -566,9 +1749,12 @@ utility RTWCasTools "RTW Cas Tools"
 					)
 				)
 			)
-			for b in boneList do
+			if(importAsEuler == true) then
 			(
-				b.rotation.controller = Euler_XYZ()
+				for b in boneList do
+				(
+					b.rotation.controller = Euler_XYZ()
+				)
 			)
 			if(writeLog == true) then
 			(
@@ -753,7 +1939,7 @@ utility RTWCasTools "RTW Cas Tools"
 					local newPosZ = relRTWPos[3]
 
 					-- We do something different for the root bone (relative stuff)
-					if(i == 1) then
+					if(i == 0) then -- TODO: Dagovax disabled this whole section for root bone because it failed!!
 					(
 						local oldPos = RTWCas_GetBoneUserParentProperty bonesPositionEnabled[i]
 						local originalPosX = oldPos[1]
@@ -826,10 +2012,15 @@ utility RTWCasTools "RTW Cas Tools"
 	
 	group "Export"
 	(		
+		checkbox writeLogCheckbox "Create export logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .exportlog.txt file at the export location."
+		checkbox noTranslations "Force no translations" width:130 height:15 checked:false tooltip:"If checked, any bone with bone translation will be ignored for positioning export. Except first bone!"
+		label meshExportSection " === MESHES ===" height:15 tooltip:"The first section applies for exporting meshes!" align:#center
+		label animationExportSection " === ANIMATIONS ===" height:15 tooltip:"The section below only applies for animation export!" align:#center
 		spinner startFrame "Start Frame:" range:(RTWCas_GetStartFrame()) type:#integer tooltip:"Set the start frame for animation to export" align:#center width:75 scale:1
 		spinner endFrame "End Frame:" range:(RTWCas_GetEndFrame()) type:#integer tooltip:"Set the end frame for animation to export" align:#center width:75 scale:1
 		button syncFrames "Sync" width:30 height:40 offset:[57,-43] tooltip:"Sync the spinners with active scene animation range"
-		checkbox writeLogCheckbox "Create export logfile" width:130 height:15 checked:false tooltip:"Checking this will create a .exportlog.txt file at the exported animation's location"
+		checkbox inversedQuaternian "Inverse Quaternian" width:130 height:15 checked:false tooltip:"Inverse quaternian rotation by multiplying it by -1."
+		checkbox autoConvertTCB "Convert to TCB" width:130 height:15 checked:false tooltip:"Checking this will convert Euler XYZ Rotation controller to TCB Rotation"
 		button exportAnimation "Export Animation" width:130 height:30 tooltip:"Export .CAS Animation"
 	)
 	
@@ -873,7 +2064,7 @@ utility RTWCasTools "RTW Cas Tools"
 			)
 		)
 		
-		local firstBoneTempChecker = RTWCas_GetBoneUserParentProperty boneList[1] -- HACK, simply gives warning if Grasp/Release tool was not used (or InitialPos not set in bone properties)
+		local firstBoneTempChecker = RTWCas_GetBoneUserParentProperty boneList[1] -- HACK, simply gives warning if Grasp/Release tool was not used (or InitialPos not set in bone properties)		
 		
 		local numFrames = 1 + (endFrame.value - startFrame.value)
 		if(mod numFrames 2 == 0) then
@@ -881,10 +2072,40 @@ utility RTWCasTools "RTW Cas Tools"
 			messageBox "Rome requires an odd count of frames for the unpacked format. The last frame will be dropped!" title:"Warning!"
 			numFrames = numFrames - 1
 		)
+		
+		-- First we need to set it to TCB_Rotation for each bone!
+		local convertionCounter = 0
+		if(autoConvertTCB.checked) do
+		(
+			for b in boneList do
+			(
+				local result = RTWCAS_EulerToQuat b numFrames
+				if(result == true) then
+				(
+					convertionCounter += 1
+				)
+			)
+		)
+		if(convertionCounter >= 1) then
+		(
+			RTWCas_LogText("Converted {"+ (convertionCounter as string) +"} rotation controllers from Euler_XYZ to TCB controller!")
+		)
+		
 		local frameStart = startFrame.value as integer
 		local frameEnd = frameStart + (numFrames-1)
 		
-		local exportFileName = getSaveFileName types:"CAS (*.cas)|*.cas|"
+		local sceneName = ""
+		if(maxFileName != "") then
+		(
+			sceneName = maxFileName
+			local sceneNameCount = sceneName.count
+			sceneNameCount += 1
+			local maxSectionIndex = findString sceneName ".max"
+			local sceneNameLength = sceneNameCount - maxSectionIndex
+			sceneName = RTWCas_ReplaceSpaceWithUnderscore (replace sceneName maxSectionIndex sceneNameLength "")
+		)
+		
+		local exportFileName = getSaveFileName types:"CAS (*.cas)|*.cas|" filename:(toLower sceneName)
 		
 		if (exportFileName == undefined) then
 		(
@@ -900,6 +2121,8 @@ utility RTWCasTools "RTW Cas Tools"
 		local logFile = undefined
 		local writeLog = writeLogCheckbox.checked
 		
+		local forceNoTranslation = noTranslations.checked
+			
 		if(writeLog==true) then
 		(
 			logFile = openFile logFileExport mode:"wt"
@@ -914,7 +2137,7 @@ utility RTWCasTools "RTW Cas Tools"
 			frameRate = 20 -- Set the framerate to 20
 				
 			local numBones = boneList.count		
-			local numBonesWithPosition = RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd
+			local numBonesWithPosition = RTWCas_GetNumBonesWithPosition boneList frameStart frameEnd forceNoTranslation
 			
 			-- Write first 3 entries
 			WriteShort casFile numframes
@@ -932,22 +2155,33 @@ utility RTWCasTools "RTW Cas Tools"
 			(
 				format "%\t\t\t\t\t\t\t\t\t\t\t\t\t# self.npbones \t = number of bones as single byte\t\t%\n" numBonesWithPosition (RTWCas_GetPointerPosition casFile) to:logFile
 			)
-
-			-- Write rotation quaternian per frame. First we need to set it to TCB_Rotation for each bone!
-			for b in boneList do
-			(
-				b.rotation.controller = TCB_Rotation()
-			)
+			
+			-- Write rotation quaternian per frame
 			local rotCounter = 0
+			local prevQuat = for i = 1 to numBones collect (quat 0 0 0 1)
 			for k=frameStart to frameEnd do
-			(
+			(				
 				rotCounter += 1
 				for i=1 to numBones do in coordsys boneList[i].parent
 				(
-					local frameRotX = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.x) 5
-					local frameRotZ = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.z) 5
-					local frameRotY = RTWCas_RoundFloat(at time k -boneList[i][3][2].rotation.y) 5
-					local frameRotW = RTWCas_RoundFloat(at time k boneList[i][3][2].rotation.w) 5
+					local quaternian = at time k -boneList[i][3][2].rotation
+					
+					-- Ensure consistent quaternion sign with previous frame
+					if rotCounter > 1 do
+					(
+						local prev = prevQuat[i]
+						if (RTWCas_QuatDot quaternian prev < 0) do
+							quaternian = -quaternian
+					)
+					
+					-- Store current quaternion for next frame
+					prevQuat[i] = quaternian
+					
+					-- Then continue with rounding and processing
+					local frameRotX = RTWCas_RoundFloat quaternian.x 5
+					local frameRotZ = RTWCas_RoundFloat quaternian.z 5
+					local frameRotY = RTWCas_RoundFloat quaternian.y 5
+					local frameRotW = RTWCas_RoundFloat -quaternian.w 5
 					
 					if(isCollada == false) then
 					(
@@ -955,6 +2189,13 @@ utility RTWCasTools "RTW Cas Tools"
 						frameRotY = frameRotY*-1
 					)
 					
+					if inversedQuaternian.checked or classof boneList[i][3][2].rotation.controller == TCB_rotation then
+					(
+						frameRotX = frameRotX * -1
+						frameRotZ = frameRotZ * -1
+						frameRotY = frameRotY * -1
+						frameRotW = frameRotW * -1
+					)
 					
 					-- Write floats to the cas file
 					WriteFloat casFile frameRotX
@@ -969,9 +2210,13 @@ utility RTWCasTools "RTW Cas Tools"
 					)
 				)
 			)
-			for b in boneList do
+			-- Convert rotation controller back to Euler_XYZ (for every bone!)
+			if(convertionCounter >= 1) then
 			(
-				b.rotation.controller = Euler_XYZ()
+				for b in boneList do
+				(
+					b.rotation.controller = Euler_XYZ()
+				)
 			)
 			if(writeLog == true) then
 			(
@@ -982,7 +2227,7 @@ utility RTWCasTools "RTW Cas Tools"
 			local bonesWithPosition = #()
 			for i=1 to numBones do
 			(
-				if ((RTWCas_BoneHasPositionController boneList[i] frameStart frameEnd) == true) then
+				if ((RTWCas_BoneHasPositionController boneList[i] frameStart frameEnd forceNoTranslation) == true) then
 				(
 					append bonesWithPosition boneList[i]
 				)
@@ -1002,9 +2247,10 @@ utility RTWCasTools "RTW Cas Tools"
 					-- We do something different for the root bone (relative stuff)
 					if(i == 1) then
 					(
-						local oldPos = RTWCas_GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
+						local rootPos = RTWCas_GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
+						local oldPos = (at time (k-1) bonesWithPosition[i].position) -- RTWCas_GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
 						local originalPosX = oldPos[1]
-						local originalPosY = oldPos[3] -- Y in max is Z in RTW
+						local originalPosY = rootPos[3] -- Y in max is Z in RTW
 						local originalPosZ = (at time (k-1) bonesWithPosition[i].position)[2] 
 						if(k == 1) then
 						(
@@ -1012,13 +2258,11 @@ utility RTWCasTools "RTW Cas Tools"
 						)
 						
 						diffPos = point3 (framePosX - originalPosX) (framePosY - originalPosY) (framePosZ - originalPosZ)
-					)
-						
-					-- All other bones seems to be absolute offset from the parent
-					if(i != 1) then
+					) else
 					(
+						-- All other bones seems to be absolute offset from the parent
 						diffPos = point3 (framePosX) (framePosY) (framePosZ)
-					)
+					)					
 					
 					if(isCollada == false) then
 					(
@@ -1057,54 +2301,121 @@ utility RTWCasTools "RTW Cas Tools"
 				format " # -------------------------  End doubled xyz increments  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
 			
+			-- Total X offset from frame 1 to end frame 
+			local wXDiff = 0.0
+			if(numFrames > 1) then
+			(
+				wXDiff = ((at time frameEnd in coordsys world boneList[1].pos)[1] - (at time 1 in coordsys world boneList[1].pos)[1])
+			)
+			if(isCollada == false) then
+			(
+				wXDiff = wXDiff * -1
+			)
+			
+			-- Total Y offset from frame 1 to end frame 
+			local wYDiff = 0.0
+			if(numFrames > 1) then
+			(
+				wYDiff = ((at time frameEnd in coordsys world boneList[1].pos)[3] - (at time 1 in coordsys world boneList[1].pos)[3])
+			)
+			
+			-- Total Z offset from frame 1 to end frame
+			local wZDiff = 0.0
+			if(numFrames > 1) then
+			(
+				wZDiff = ((at time frameEnd in coordsys world boneList[1].pos)[2] - (at time 1 in coordsys world boneList[1].pos)[2])
+			)
+			if(isCollada == false) then
+			(
+				wZDiff = wZDiff * -1
+			)
+			
+			-- 2D distance on the XZ plane (horizontal displacement) xzvecdist=sqrt(xdiff 2 +zdiff 2))
+			local wZxvecdist = sqrt(wXDiff^2 + wZDiff^2)
+			
 			-- Doubled distance vals
 			local doubleDistanceCounter = 0
-			local ulim = ((numFrames-1)/2)
+			local halfFrameCount = ((numFrames-1)/2)
+			local totalDistAccum = 0.0
 			
-			for k=frameEnd to frameStart by -2 do
+			for k=1 to halfFrameCount do
 			(
-				if(k > 1) then
+				local idx1 = (k - 1) * 2 + 1
+				local idx2 = idx1 + 2
+				
+				local vecx = at time idx1 in coordsys world boneList[1].pos[1]
+				local vecz = at time idx1 in coordsys world boneList[1].pos[2]
+				local dist = sqrt(vecx * vecx + vecz * vecz)
+				    
+				-- Compute valremain
+				local doubleDistance = wZxvecdist - dist
+				if doubleDistance < 0.0 then 
 				(
-					local doubleDistance = (at time k in coordsys world boneList[1].pos)[2]
-					if(isCollada == false) then
-					(
-						doubleDistance = doubleDistance * -1
-					)
-					WriteFloat casFile doubleDistance
-					if(writeLog == true) then
-					(
-						format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
-					)
-					doubleDistanceCounter += 1
+					doubleDistance = 0.0
 				)
+				WriteFloat casFile doubleDistance
+				if(writeLog == true) then
+ 				(
+ 					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
+ 				)
+				
+				doubleDistanceCounter += 1
 			)
+			
+-- 			for k=frameStart to (halfFrameCount-1) by 2 do
+-- 			(
+-- 				local xEnd = at time (k+1) in coordsys world boneList[1].pos[1]
+-- 				local xStart = at time k in coordsys world boneList[1].pos[1]
+-- 				local zEnd = at time (k+1) in coordsys world boneList[1].pos[2]
+-- 				local zStart = at time k in coordsys world boneList[1].pos[2]
+-- 				
+-- 				
+-- 				local xDiff = xEnd - xStart
+-- 				local zDiff = zEnd - zStart
+-- 				if(isCollada == false) then
+-- 				(
+-- 					xDiff = xDiff * -1
+-- 					zDiff = zDiff * -1
+-- 				)
+-- 				
+-- 				local vectorDist = sqrt(xDiff^2 + zDiff^2)
+-- 				totalDistAccum += vectorDist
+-- 				local doubleDistance = wZxvecdist - totalDistAccum
+-- 				WriteFloat casFile doubleDistance
+-- 				if(writeLog == true) then
+-- 				(
+-- 					format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t% \n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
+-- 				)
+-- 				--RTWCas_LogText("double distance for: frame " + (logFileExport as string))
+-- 				format "double distance for: frame % to % | xEnd % - xStart % = xDiff % | zEnd % - zStart % = zDiff % || vectorDist = %\n" k (k+2) xEnd xStart xDiff zEnd zStart zDiff vectorDist
+-- 				
+-- 				doubleDistanceCounter += 1
+-- 			)
+			
+			
+			
+-- 			for k=frameEnd to frameStart by -2 do
+-- 			(
+-- 				if(k > 1) then
+-- 				(
+-- 					local doubleDistance = (at time k in coordsys world boneList[1].pos)[2]
+-- 					if(isCollada == false) then
+-- 					(
+-- 						doubleDistance = doubleDistance * -1
+-- 					)
+-- 					WriteFloat casFile doubleDistance
+-- 					if(writeLog == true) then
+-- 					(
+-- 						format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
+-- 					)
+-- 					doubleDistanceCounter += 1
+-- 				)
+-- 			)
+			
 			if(writeLog == true) then
 			(
 				format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
 			)
-			
-			--for k=(frameEnd - (ulim+1)) to frameStart by -1 do
-			--(
-				--local frameTest = k*2
-				--local frameZ = (at time frameTest in coordsys world boneList[1].pos)[2]
-				--local frameZA = (at time (frameTest-1) in coordsys world boneList[1].pos)[2]
-				--local diffZ = frameZ - frameZA
-				--local doubleDistance = (frameZ + (diffZ/2))
-				--if(isCollada == false) then
-				--(
-					--doubleDistance = doubleDistance * -1
-				--)
-				--WriteFloat casFile doubleDistance
-				--if(writeLog == true) then
-				--(
-					--format "\t\t%\t\t\t\t\t\t\t\t\t\t# doubled distance values\t\t\t\t%\n" (RTWCas_FormatFloatValue doubleDistance 5)  doubleDistanceCounter to:logFile
-				--)
-				--doubleDistanceCounter += 1
-			--)
-			--if(writeLog == true) then
-			--(
-				--format " # -------------------------  End doubled distance vals  ----------------------------  \t\t%\n" (RTWCas_GetPointerPosition casFile) to:logFile
-			--)
 			
 			-- Write control bone position
 			--print("Adding control bone position to root bone " + boneList[1].name)
@@ -1133,57 +2444,30 @@ utility RTWCasTools "RTW Cas Tools"
 			if(numFrames > 1) then
 			(
 				wTime = ((numFrames-1) as float / 20 as float)	
-			)
-			WriteFloat casFile wTime
-			-- Not sure about this value, but seems to be same as Z difference
-			local wZxvecdist = 0.0
-			if(numFrames > 1) then
-			(
-				wZxvecdist = ((at time frameEnd in coordsys world boneList[1].pos)[2] - (at time 1 in coordsys world boneList[1].pos)[2])
-			)
-			if(isCollada == false) then
-			(
-				wZxvecdist = wZxvecdist * -1
-			)
-			WriteFloat casFile wZxvecdist
-			-- Total X offset from frame 1 to end frame 
-			local wXDiff = 0.0
-			if(numFrames > 1) then
-			(
-				wXDiff = ((at time frameEnd in coordsys world boneList[1].pos)[1] - (at time 1 in coordsys world boneList[1].pos)[1])
-			)
-			if(isCollada == false) then
-			(
-				wXDiff = wXDiff * -1
-			)
-			WriteFloat casFile wXDiff
-			
-			-- Total Y offset from frame 1 to end frame 
-			local wYDiff = 0.0
-			if(numFrames > 1) then
-			(
-				wYDiff = ((at time frameEnd in coordsys world boneList[1].pos)[3] - (at time 1 in coordsys world boneList[1].pos)[3])
-			)
-			WriteFloat casFile wYDiff
-			
-			-- Total Z offset from frame 1 to end frame
-			local wZDiff = wZxvecdist
-			WriteFloat casFile wZDiff
+			)		
 			
 			-- Average distance traveled in seconds
 			local wAvDistSeconds = 0.0 
 			if(wTime > 0.0) then -- Stop zero devision exception
 			(
-				wAvDistSeconds = (wZDiff / wTime)
+				wAvDistSeconds = (wZxvecdist / wTime)
 			)
-			WriteFloat casFile wAvDistSeconds
 			
 			-- Average distance in thenths of seconds
 			local wTenths = (wAvDistSeconds / 10 as float)
-			WriteFloat casFile wTenths
 			
 			-- Average Distance per frame (val_2 / (Val_1 + 0.05) / 20)
 			local wAvgFrames = (wZxvecdist / (wTime + 0.05) / 20)
+	
+			
+			-- Now write all the floats!
+			WriteFloat casFile wTime
+			WriteFloat casFile wZxvecdist
+			WriteFloat casFile wXDiff
+			WriteFloat casFile wYDiff
+			WriteFloat casFile wZDiff
+			WriteFloat casFile wAvDistSeconds
+			WriteFloat casFile wTenths
 			WriteFloat casFile wAvgFrames
 			
 			if(writeLog == true) then
@@ -1198,7 +2482,7 @@ utility RTWCasTools "RTW Cas Tools"
 			(
 				if(boneList[b+1] != undefined) then
 				(
-					if ((RTWCas_BoneHasPositionController boneList[b+1] frameStart frameEnd) == true) then
+					if ((RTWCas_BoneHasPositionController boneList[b+1] frameStart frameEnd forceNoTranslation) == true) then
 					(
 						append bitBonePositions 1
 					) else
@@ -1277,5 +2561,200 @@ utility RTWCasTools "RTW Cas Tools"
 			--format "*** % ***\n%\n" (getCurrentException()) (getCurrentExceptionCallStack())
 		)
 		print("Animation Export -> Completed")
+	)
+	
+	global casAnimationRange = #() -- whole animation range
+	global casAnimationFrames = #() -- whole animation frames copy/paste
+	global casAnimationFrameData = #() -- single frame copy/paste
+	group "Animations"
+	(
+		checkbox onlyCurrentFrameCheckBox "Current frame only" width:130 height:15 checked:false tooltip:"Only paste copied animation at the exact current frame. Note that if you have already an animation, it will probably glitch a bit."
+		button copyFrame "Copy Frame" width:130 height:30 tooltip:"Copies the current frame's position and rotation for every bone in the scene into memory. Can even be copied among multiple scenes!"
+		button pasteFrame "Paste Frame" width:130 height:30 tooltip:"Pastes the saved position and rotation from previously copied memory into current time frame for every bone."
+		groupBox animationClingLine1 width: 130 height:2
+		button syncBoneFrame "Sync Bone" width:130 height:30 tooltip:"Sync a bone to current selected object. Each frame in current animation of the selected object will be synced in world coordination to the bone."
+	)
+	
+	-- Copy a frame
+	on copyFrame pressed do
+	(
+		local isCollada = RTWCas_SceneIsCollada()
+		
+		-- Collect all bones but Armature
+		local boneList = RTWCas_GetBones()
+		if(boneList == undefined or boneList.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Armature / Scene Root?)!" title:"Error!"
+			return null
+		)
+		
+		casAnimationFrameData = #() -- reset array
+		
+		append casAnimationFrameData boneList.count -- first array item is bone list count
+		
+		-- Get the current frame in the animation range
+		local currentFrame = int(currentTime.frame)
+
+		for k=currentFrame to currentFrame do in coordsys parent -- single for loop!
+		(
+			local frameArray = #()
+			for b=1 to boneList.count do
+			(
+				local posArray = #()
+				local boneRot = at time k boneList[b].rotation
+				local bonePos = at time k boneList[b].position
+				append posArray boneRot
+				append posArray bonePos
+				append frameArray posArray
+			)
+			append casAnimationFrameData frameArray
+		)
+
+		print("Copied animation for frame " + currentFrame as string + "!")
+	)
+	
+	-- Paste a frame
+	on pasteFrame pressed do
+	(
+		local isCollada = RTWCas_SceneIsCollada() -- need to do something with this later!
+		
+		-- Collect all bones but Armature
+		local boneList = RTWCas_GetBones()
+		if(boneList == undefined or boneList.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Armature / Scene Root?)!" title:"Error!"
+			return null
+		)
+		
+		if(casAnimationFrameData == undefined or casAnimationFrameData.count != 2) then
+		(
+			messageBox "You need to 'Copy Frame' from another animation first!" title:"Error!"
+			return null
+		)
+		
+		local numBones = casAnimationFrameData[1]
+		local frameArray = casAnimationFrameData[2]
+		
+		-- Number of saved bones differ from current bones in the scene!
+		if(numBones != boneList.count) then
+		(
+			local boneDifferMessage = ("Number of bones in copied animation {" + (numBones as string) + "} differs from number of bones in this scene {" + (boneList.count as string) + "}!\n\nContinue anyway?")
+			if ((queryBox boneDifferMessage beep:true) == false) then
+			(
+				messageBox "Animation copy failed!" title:"Error!"
+				return null
+			)
+		)
+		
+		local saveBonePos = #()
+		for b=1 to boneList.count do
+		(
+			local pos = at time 1 boneList[b].position
+			append saveBonePos pos
+		)
+		
+		-- Get the current frame in the animation range
+		local currentFrame = int(currentTime.frame)
+		
+		if(onlyCurrentFrameCheckBox.checked) then
+		(
+			for k=currentFrame to currentFrame do animate on in coordsys parent
+			(
+				for b=1 to numBones do
+				(
+					local posArray = frameArray[b]
+					at time k boneList[b].rotation = posArray[1]
+					at time k boneList[b].position = posArray[2]
+				)
+			)
+		)
+		else -- No animate on, only set positions + rotation at current time (will apply to all frames then)
+		(
+			for k=currentFrame to currentFrame do in coordsys parent
+			(
+				for b=1 to numBones do
+				(
+					local posArray = frameArray[b]
+					boneList[b].rotation = posArray[1]
+					boneList[b].position = posArray[2]
+				)
+			)
+		)
+	)
+	
+	-- Sync bone in world coord position + rotation to selected object
+	on syncBoneFrame pressed do
+	(
+		global syncBoneArray = RTWCas_GetBones()
+		if (syncBoneArray.count == 0) then
+		(
+			messageBox "There are no bones in this scene!" title:"Error!"
+			return null
+		)
+		
+		local selected = for t in selection collect t
+		if(selected == undefined or selected.count == 0) then
+		(
+			messageBox "You need to select an object! Without it we can not sync a bone" title:"Error!"
+			return null
+		)
+		if(selected.count > 1) then
+		(
+			messageBox "We need a single object! You selected multiple objects" title:"Error!"
+			return null
+		)
+		global selectedSyncObj = selected[1]
+		global syncBoneNameArray = for i in syncBoneArray collect i.name	
+		
+		rollout dialog_selBone "Select a bone from the list"
+		(
+			label syncBoneObjLabelDialog1 "Select the bone you want to sync to" 
+			label syncBoneObjLabelDialog2 ""
+			dropdownlist syncBoneObjBoneList "" align:#center items:syncBoneNameArray
+			button syncBoneObjContinue "Continue" width:130 height:30
+			
+			-- Change label text dynamically
+			on dialog_selBone open do
+			(
+				syncBoneObjLabelDialog2.text = ("' "+ selectedSyncObj.name +" '")
+			)
+			
+			-- Continue button pressed
+			on syncBoneObjContinue pressed do
+			(
+				local selectedBone = (for b in syncBoneArray where (b.name == syncBoneObjBoneList.selected) collect b)[1]
+				if(selectedBone == undefined) then
+				(
+					messageBox "The selected bone is invalid" title:"Error!"
+					return false
+				)
+				try (destroydialog dialog_selBone) catch() -- kill dialog
+				print ("User selected bone: " + selectedBone.name)
+				
+				local numFrames = 1 + (animationRange.end - animationRange.start)
+				
+				local continueMessage = ("Continue overwriting any existing animation keys for bone '" + selectedBone.name + "'?\n For a total of {" + (numFrames as string) + "} frames, we will copy all position and rotation from object '"+ selectedSyncObj.name + "'\n\nContinue?")
+				if ((queryBox continueMessage beep:true) == false) then
+				(
+					return false
+				)
+				
+				-- First reset the model from any previous animation
+				deletekeys selectedBone.rotation.controller #allKeys
+				deletekeys selectedBone.position.controller #allKeys
+				
+				print("Sync Bone to Object -> Started")
+				for k = 1 to numFrames do animate on in coordsys world
+				(
+					at time (k) selectedBone.rotation = at time (k) selectedSyncObj.rotation
+					at time (k) selectedBone.position = at time (k) selectedSyncObj.position
+				)
+				redrawViews()
+				
+				print("Sync Bone to Object -> Completed!")
+			)
+		)
+		createDialog dialog_selBone 210 100
+		
 	)
 )
