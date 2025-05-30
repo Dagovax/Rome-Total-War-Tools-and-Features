@@ -23,11 +23,45 @@
 -- v1.4 -- Added switch option for animation import: Euler XYZ or default TCB. Note that the export always converts it back to TCB (which is game format)
 -- v1.5 -- Added copy/paste animation frames
 -- v1.6 -- Fixed some errors when writing animation cas files: double distance values were incorrect, as well as total distance traveled. Also fixed wrong positioning of root bone in export (glitchy anim on strat map)
+-- v1.7 -- Added ForcePosition and SkipPosition support, now as UI buttons, as well as reset. Also added textbox for manual bone input. Updated Grasp/Release to work with the updated user property data
 ----------------------------------------------------------
 
 global useLog = true
 global memoryBones = #()
 global graspWarning = false
+
+-- Parse string to value
+function RTWCas_ParseValue str =
+(
+	str = trimRight (trimLeft str)
+	local lowerStr = toLower str
+
+	-- Handle boolean
+	if lowerStr == "true" then return true
+	if lowerStr == "false" then return false
+
+	-- Handle quoted strings
+	if matchPattern str pattern:"\"*\"" or matchPattern str pattern:"'*'" then
+	(
+		-- Remove quotes
+		return substring str 2 (str.count - 2)
+	)
+
+	-- Try to execute as MaxScript value (safe for numbers, arrays, etc.)
+	local parsedVal
+    try (
+        parsedVal = execute str
+    ) catch (
+        parsedVal = undefined
+    )
+
+	-- Check type and return if valid
+	if isKindOf parsedVal Float or isKindOf parsedVal Integer or isKindOf parsedVal Array then
+		return parsedVal
+
+	-- Fallback: treat as plain string
+	return str
+)
 
 function RTWCas_ReplaceSpaceWithUnderscore inputString = 
 (
@@ -55,6 +89,67 @@ function RTWCas_GetRootNode =
 		)
 	)
 	return armature
+)
+
+-- Is currently selected object the armature root?
+function RTWCas_IsArmature boner =
+(
+	if(boner == undefined) then
+	(
+		return true
+	)
+	if(boner.name == "Armature") then
+	(
+		return true
+	)
+	if(boner.name == "Scene Root") then
+	(
+		return true
+	)
+	if(boner.name == "Scene_Root") then
+	(
+		return true
+	)
+)
+
+-- Get currently selected bone, but if name is specified, use that instead
+function RTWCas_GetSelectedBoneOrByName boneName:undefined =
+(
+	if (boneName != undefined) then
+	(
+		-- collect all bones but Armature
+		local boneList = RTWCas_GetBones()
+		if(boneList == undefined or boneList.count == 0) then
+		(
+			messageBox "There are no bones in this scene (only Root Bone?)!" title:"Error!"
+			return undefined
+		)
+		for boner in boneList do
+		(
+			if boner.name == boneName then return boner
+		)
+		return undefined
+	)	
+	
+	local selected = for t in selection where (classOf t == Point or classOf t == Dummy) collect t
+	print selected
+	if(selected == undefined or selected.count == 0) then
+	(
+		messageBox "You need to select a bone!" title:"Error!"
+		return undefined
+	)
+	if(selected.count > 1) then
+	(
+		messageBox "We need a single bone! You selected multiple objects!" title:"Error!"
+		return undefined
+	)
+	local selectedBone = selected[1]
+	if (RTWCas_IsArmature selectedBone == true) then
+	(
+		messageBox "Armature / Scene Root is not a bone!" title:"Error!"
+		return undefined
+	)
+	return selected[1]
 )
 
 -- Check if object has a root node parent with a name
@@ -349,7 +444,7 @@ function RTWCas_StorePivotOffset obj =
 	(
 		propValue = propValue + "%" + offset[i] as string
 	)
-	setUserProp obj "VertexToPivot" propValue
+	RTWCas_AddUserProp obj "VertexToPivot" propValue:propValue
 )
 
 -- Compute New Pivot Position per Frame
@@ -359,7 +454,7 @@ function RTWCas_ComputePivotPosition obj frame =
 	(
 		return false
 	)	
-	local propValue = getUserProp obj "VertexToPivot"
+	local propValue = RTWCas_GetUserProp obj "VertexToPivot"
 	if propValue != undefined then
 	(
 		local offset = filterString propValue "%"
@@ -377,17 +472,156 @@ function RTWCas_ComputePivotPosition obj frame =
 	)
 )
 
+-- Get the user properties as string array
+function RTWCas_GetUserPropArray boner =
+(
+	if (boner != undefined) then
+	(
+		local buffer = replace_LF_with_CRLF (getUserPropBuffer boner)
+		local normalizedStr = substituteString buffer "\r\n" "\n"
+		
+		-- Split on \n
+		local linesArray = filterString normalizedStr "\n"
+		
+		-- Return result
+		return linesArray
+	)
+)
+
+-- Return the value of the defined user property
+function RTWCas_GetUserProp boner propName =
+(
+	if (boner != undefined) then
+	(
+		local props = RTWCas_GetUserPropArray boner
+		for line in props do
+		(
+			-- Check if the line starts with the property name
+			if matchPattern line pattern:(propName + "*") do
+			(
+				local parts = filterString line "="
+				if parts.count > 1 then 
+				(
+					-- only return the value, trim around the '=' sign
+					local result = trimRight (trimLeft parts[2])
+					
+					-- try to parse the result string into any value
+					return RTWCas_ParseValue result
+				) else
+				(
+					-- Return line value if no '=' sign is found
+					return line
+				)
+			)
+		)
+	)
+	return undefined
+)
+
+-- Get boolean representation if user property is assigned without a value. Then this method returns true
+function RTWCas_GetUserPropBoolean boner propName =
+(
+	local propResult = RTWCas_GetUserProp boner propName
+	if (propResult != undefined) then
+	(
+		-- If it was parsed to a Boolean true
+		if propResult == true then return true
+			
+		-- If it was parsed to a Boolean false
+		if propResult == false then return false
+		
+		-- If the property was defined without a value (e.g., just "Flag"), it's a string, and we assume it's true
+		if isKindOf propResult String then return true
+	)
+	return false
+)
+
+-- Set the user properties buffer using input array
+function RTWCas_SetUserPropArray boner arr =
+(
+	if (boner != undefined and arr != undefined) then
+	(
+		-- Join the array into a single string with newline separators
+        local propString = ""
+        for i = 1 to arr.count do
+        (
+            propString += arr[i]
+            if i < arr.count do propString += "\r\n"
+        )
+
+        -- Set the user property buffer
+        setUserPropBuffer boner propString
+	)
+)
+
+-- Add a new user property
+function RTWCas_AddUserProp boner propString propValue:undefined =
+(
+	if(boner != undefined) then
+	(
+		local linesArray = RTWCas_GetUserPropArray boner
+		-- Filter out entries containing the propString, to prevent duplicate value
+		local filteredArray = for line in linesArray where ((findString line propString) == undefined) collect line
+		-- Add the new property to the array
+		if (propValue == undefined) then
+		(
+			append filteredArray propString
+		) else
+		(
+			append filteredArray (propString + " = " + propValue as string)
+		)
+	
+		-- Set the updated array back to the object
+		RTWCas_SetUserPropArray boner filteredArray
+	)
+)
+
+-- Remove both ForcePosition and SkipPosition
+function RTWCas_ResetBonePositionFlags boner =
+(
+	if(boner != undefined) then
+	(
+		local linesArray = RTWCas_GetUserPropArray boner
+		
+		-- Filter out entries containing "ForcePosition" or "SkipPosition"
+		local filteredArray = for line in linesArray where (
+			(findString line "ForcePosition") == undefined and (findString line "SkipPosition") == undefined
+		) collect line
+		RTWCas_SetUserPropArray boner filteredArray
+	)
+)
+
+-- Set the ForcePosition flag
+function RTWCas_SetBoneForcePosition boner =
+(
+	if(boner != undefined) then
+	(
+		RTWCas_ResetBonePositionFlags boner 
+		RTWCas_AddUserProp boner "ForcePosition"
+	)
+)
+
+-- Set the SkipPosition flag
+function RTWCas_SetBoneSkipPosition boner =
+(
+	if(boner != undefined) then
+	(
+		RTWCas_ResetBonePositionFlags boner
+		RTWCas_AddUserProp boner "SkipPosition"
+	)
+)
+
 -- Set the original parent offset
 function RTWCas_SetBoneUserParentProperty boner override =
 (
 	if(boner == undefined) then
 	(
-		return null
+		return false
 	)
-	local initialPosition = getUserProp boner "InitialPosition"
+	local initialPosition = RTWCas_GetUserProp boner "InitialPosition"
 	if (initialPosition != undefined and override != true) then
 	(
-		return null
+		return false
 	)
 	local offset = in coordsys boner.parent boner.pos
 	local propValue = ""
@@ -395,7 +629,7 @@ function RTWCas_SetBoneUserParentProperty boner override =
 	(
 		propValue = propValue + "%" + offset[i] as string
 	)
-	setUserProp boner "InitialPosition" propValue
+	RTWCas_AddUserProp boner "InitialPosition" propValue:propValue
 )
 
 -- Get the original parent offset
@@ -403,10 +637,10 @@ function RTWCas_GetBoneUserParentProperty boner =
 (
 	if(boner == undefined) then
 	(
-		return null
+		return false
 	)
-	local initialPosition = getUserProp boner "InitialPosition"
-	if initialPosition != undefined then
+	local initialPosition = RTWCas_GetUserProp boner "InitialPosition"
+	if (initialPosition != undefined) then
 	(
 		local offset = filterString initialPosition "%"
 		return point3 (offset[1] as float) (offset[2] as float) (offset[3] as float)
@@ -443,12 +677,16 @@ function RTWCas_BoneHasPositionController boneIdx frameStart frameEnd forceNoTra
 	(
 		return false -- Now every other bone should return false. Only first bone should have it!
 	)
-	
 	local initialPos = RTWCas_GetBoneUserParentProperty boneIdx
-	local forcePosition = getUserProp boneIdx "ForcePosition"
-	if (forcePosition != undefined) then
+	local forcePosition = RTWCas_GetUserPropBoolean boneIdx "ForcePosition"
+	local skipPosition = RTWCas_GetUserPropBoolean boneIdx "SkipPosition"
+	if (forcePosition != undefined and forcePosition == true) then
 	(
 		return true
+	)
+	if (skipPosition != undefined and skipPosition == true) then
+	(
+		return false
 	)
 	if(initialPos != undefined) then
 	(
@@ -1405,7 +1643,7 @@ utility RTWCasTools "RTW Cas Tools"
 		HyperLink author "by Sirrianus Dagovax" align:#center address:"mailto:dagovax@gmail.com" color:(color 0 0 170) hoverColor:(color 170 0 0)
 	)
 	
-	group "Remember Bone Positions"
+	group "Skeleton"
 	(
 		label clingLabel1 "Click on the 'Grasp' button"
 		label clingLabel2 "to copy current model's"
@@ -1472,10 +1710,116 @@ utility RTWCasTools "RTW Cas Tools"
 			(
 				propValue = propValue + "%" + offset[p] as string
 			)
-			setUserProp boneArray[i] "InitialPosition" propValue
+			RTWCas_AddUserProp boneArray[i] "InitialPosition" propValue:propValue
 		)
 		
 		print "Released the grasped bone positions into current scene!"
+	)
+	
+	group "Bone Flags"
+	(
+		label bsclingLabel1 "Functions below only"
+		label bsclingLabel2 "work on currently"
+		label bsclingLabel3 "selected bone"
+		groupBox bsclingLine1 width:130 height:2
+		checkbox bsBoneInputCheckbox "Manual Input" width:130 height:15 checked:false tooltip:"Checking this will only apply buttons below on the name of the entered bone in the textbox below."
+		edittext bsBoneInput wdith:130 text:"bone_Magazine" bold:false enabled:false tooltip:"Bone name to be used if above checkbox is ticked."
+		groupBox bsclingLine2 width:100 height:2 align:#center
+		button bsForcePosition "Force Transform" width:100 tooltip:"For animation export: always includes this bone’s transform position data in the exported .cas file."
+		button bsSkipPosition "Skip Transform" width:100 tooltip:"For animation export: excludes this bone’s transform position data from the .cas animation file."
+		button bsReset "Reset" width:100 tooltip:"Removes any export flag previously assigned to this bone from this section."
+	)
+	
+	-- On checkbox state change
+	on bsBoneInputCheckbox changed state do
+	(
+		bsBoneInput.enabled = bsBoneInputCheckbox.checked
+		if (bsBoneInputCheckbox.checked == true) then
+		(
+			bsclingLabel3.text = "entered bone"
+		) else
+		(
+			bsclingLabel3.text = "selected bone"
+		)
+	)
+	
+	-- Add the ForcePosition flag to selected bone. 
+	on bsForcePosition pressed do
+	(		
+		local editboxText = bsBoneInput.text
+		local boner
+		if(bsBoneInput.enabled and editboxText != undefined) then
+		(
+			boner = RTWCas_GetSelectedBoneOrByName boneName:bsBoneInput.text
+			if boner == undefined then
+			(
+				messageBox ("Bone does not exist in scene: " + editboxText)  title:"Error!"
+				return null
+			)
+		) else
+		(
+			boner = RTWCas_GetSelectedBoneOrByName()
+		)
+		if(boner == undefined) then
+		(
+			return null
+		)
+		
+		local selectedBone = boner
+		RTWCas_SetBoneForcePosition selectedBone
+		return null
+	)
+
+	-- Add the SkipPosition flag to selected bone. 
+	on bsSkipPosition pressed do
+	(		
+		local editboxText = bsBoneInput.text
+		local boner
+		if(bsBoneInput.enabled and editboxText != undefined) then
+		(
+			boner = RTWCas_GetSelectedBoneOrByName boneName:bsBoneInput.text
+			if boner == undefined then
+			(
+				messageBox ("Bone does not exist in scene: " + editboxText)  title:"Error!"
+				return null
+			)
+		) else
+		(
+			boner = RTWCas_GetSelectedBoneOrByName()
+		)
+		if(boner == undefined) then
+		(
+			return null
+		)
+		
+		local selectedBone = boner
+		local setSkipper = RTWCas_SetBoneSkipPosition selectedBone
+	)
+
+	-- Reset (remove) both ForcePosition and SkipPosition flags if present
+	on bsReset pressed do
+	(		
+		local editboxText = bsBoneInput.text
+		local boner
+		if(bsBoneInput.enabled and editboxText != undefined) then
+		(
+			boner = RTWCas_GetSelectedBoneOrByName boneName:bsBoneInput.text
+			if boner == undefined then
+			(
+				messageBox ("Bone does not exist in scene: " + editboxText)  title:"Error!"
+				return null
+			)
+		) else
+		(
+			boner = RTWCas_GetSelectedBoneOrByName()
+		)
+		if(boner == undefined) then
+		(
+			return null
+		)
+		
+		local selectedBone = boner
+		RTWCas_ResetBonePositionFlags selectedBone
 	)
 	
 	global animImportFrameChanged = false
@@ -2248,10 +2592,10 @@ utility RTWCasTools "RTW Cas Tools"
 					if(i == 1) then
 					(
 						local rootPos = RTWCas_GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
-						local oldPos = (at time (k-1) bonesWithPosition[i].position) -- RTWCas_GetBoneUserParentProperty bonesWithPosition[i] -- original root bone pos at frame 0
+						local oldPos = (at time (k-1) bonesWithPosition[i].position)
 						local originalPosX = oldPos[1]
-						local originalPosY = rootPos[3] -- Y in max is Z in RTW
-						local originalPosZ = (at time (k-1) bonesWithPosition[i].position)[2] 
+						local originalPosY = rootPos[3] -- Z in max is Y in RTW (height. Absolute offset from the ground (zero))
+						local originalPosZ = oldPos[2] 
 						if(k == 1) then
 						(
 							originalPosZ = oldPos[2]
