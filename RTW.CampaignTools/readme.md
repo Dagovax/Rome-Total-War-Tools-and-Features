@@ -11,61 +11,15 @@ Make sure you have <B>.NET Desktop Runtime 8.0.xx </B> installed: You can find t
 
 I recommend you to use the 64 bit variant. Only use 32 bit if your pc is not running on a 64 bit processor.
 
-## Startup Window
-The first window, also called startup window, does not have campaign loaded. You can use the menu bar to load a new campaign, or use the shortcut <b>Ctrl + N</b>.
->
-![Imgur](https://i.imgur.com/qOCBv3W.png)
-
-Additionaly, before even loading a campaign, you can change the settings using the menu bar. If you have a campaign that has very large regions inside it, you can check the <b>Settings -> Campaign -> Skip Border Calculation</b>. This will speed up the validation, but will have visual side effects later. For additional settings, keep an eye on the <b>Change Log</b>. 
-
-### Load Campaign
-The load campaign window will ask you to browse to your campaign directory. This does not need to be the 'base' directory, because the tool automatically searches that one if certain files can not be found in your selected campaign.<br/><br/>
-![Imgur](https://i.imgur.com/ldJKYH0.png)
-
-The continue button will become enabled when you have chosen a valid directory.
-
-### Validation
-After clicking the 'Continue' button, the tool will load required files and also validates them. This might take some time, but you can see the progressbar.<br/><br/>
-![Imgur](https://i.imgur.com/GRC2iTi.png)
-
-During the validation process you might get some warning dialogs, that tell you something is wrong in one of your files, or (most of the time) missing lookup entries:
-
-![Imgur](https://i.imgur.com/zQ5E30X.png)
-
-I advice that you solve these problems. You could also get some messages with an exception stack trace; those are application issues and should be forwarded to me.
-Since one of the first updates, you can reload campaign files once you are in the <b>Campaign View Window</b>. You can use <b>File -> Reload (Ctl+R)</b> to reload any changed files, and the tool will also revalidate the campaign files if necessary. 
-
-### Campaign View
-![Imgur](https://i.imgur.com/Zs9L2bB.png)
-
-This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. 
-On the right side of the screen, you can see the region information based on the selected region.
-
-Note that the current version is view-only, meaning that you can not edit stuff with this tool. 
-
-#### Overlays
-![Imgur](https://i.imgur.com/sbkE0AH.png)
->
-The <b>Overlays</b> tab on the right side allows you to show the specific maps in <b>scaled mode</b>. This means that, if a certain .tga has larger dimensions than the map_regions.tga, the tool will show the overlay of that specific .tga in the way the game engine reads them for region validation. If a map has issues, you can click on the error indicator to view the issues in a dialog. 
-
-To enable the default overlays, click the <b>Show Overlay</b> button. Then click on the map you want to view. Selected regions will be rendered over any default overlays. Click the <b>Hide Overlay</b> button to hide the default overlays again.
-
-Overlays such as <i>map_features.tga</i> are loaded at top most render, and are even rendered on top of the selected region highlighter. They can be toggled on/off by clicking om them without any overlay on/off mode required.
-
-#### Resources
-![Imgur](https://i.imgur.com/nmLynVO.png)
->
-The <b>Resources</b> tab allows you to view resource allocation. For both <b><i>Hidden Resources</i></b> and <b><i>Trade Resources</i></b>, you can highlight which regions have the selected resource(s). To do so, click the <b>Start Highlight</b> button. Turn the highlight off again by clicking the <b>Stop Highlight</b> button. During highlight mode you can check/uncheck multiple resources. 
-
-Additionaly, <b><i>Trade Resources</i></b> you have defined in <i>descr_strat.txt</i>, can be made visible on the main view using the settings and selecting them in the list. If you have a custom <i>descr_sm_resources.txt</i> in your mod, with unique icons, they will be loaded (as can be seen in example list). If the icon can not be loaded, or is undefined, then a default resource RR icon will be shown.
-Resource quantity etc for Rome Remastered can be seen in the region information after selecting it.
-
-#### Mercenaries
-![Imgur](https://i.imgur.com/CuXwqGN.png)
->
-The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
-
 ## Change Log
+***Version 1.0.21***
+- Added parse support for `descr_model_battle`, `descr_engines.txt`, `descr_mount.txt`, `descr_projectile_new.txt`
+- Added additional warning tab for 'Data Files', which shows all files parsed during validation but not that required for campaign.
+- Warning Dialog now can now be resized (only larger).
+- The **Save to File** button on the Warning Dialog now lets you change the log output location.
+- Added initialization progress before validation where all resource files (.cas, .tga etc) will be loaded for lookup. That include from .pak files (which will be loaded first).
+- Pack files will be scanned only for now. Some of them are very large and don't want all the files in memory. Extraction on the fly is a possible feature request.
+
 ***Version 1.0.20***
 - Upgraded to .NET 8.0. **You need to install the new Desktop Runtime**!
 - A lot of code quality improvements, making my life easier.
@@ -243,6 +197,60 @@ The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resour
 
 <i><b>Version 1.0.0</b></i>
 - Initial version
+
+## Startup Window
+The first window, also called startup window, does not have campaign loaded. You can use the menu bar to load a new campaign, or use the shortcut <b>Ctrl + N</b>.
+>
+![Imgur](https://i.imgur.com/qOCBv3W.png)
+
+Additionaly, before even loading a campaign, you can change the settings using the menu bar. If you have a campaign that has very large regions inside it, you can check the <b>Settings -> Campaign -> Skip Border Calculation</b>. This will speed up the validation, but will have visual side effects later. For additional settings, keep an eye on the <b>Change Log</b>. 
+
+### Load Campaign
+The load campaign window will ask you to browse to your campaign directory. This does not need to be the 'base' directory, because the tool automatically searches that one if certain files can not be found in your selected campaign.<br/><br/>
+![Imgur](https://i.imgur.com/ldJKYH0.png)
+
+The continue button will become enabled when you have chosen a valid directory.
+
+### Validation
+After clicking the 'Continue' button, the tool will load required files and also validates them. This might take some time, but you can see the progressbar.<br/><br/>
+![Imgur](https://i.imgur.com/GRC2iTi.png)
+
+During the validation process you might get some warning dialogs, that tell you something is wrong in one of your files, or (most of the time) missing lookup entries:
+
+![Imgur](https://i.imgur.com/zQ5E30X.png)
+
+I advice that you solve these problems. You could also get some messages with an exception stack trace; those are application issues and should be forwarded to me.
+Since one of the first updates, you can reload campaign files once you are in the <b>Campaign View Window</b>. You can use <b>File -> Reload (Ctl+R)</b> to reload any changed files, and the tool will also revalidate the campaign files if necessary. 
+
+### Campaign View
+![Imgur](https://i.imgur.com/Zs9L2bB.png)
+
+This is the main window where you can see your <i>map_regions.tga</i>. You can click the regions and get the region information. 
+On the right side of the screen, you can see the region information based on the selected region.
+
+Note that the current version is view-only, meaning that you can not edit stuff with this tool. 
+
+#### Overlays
+![Imgur](https://i.imgur.com/sbkE0AH.png)
+>
+The <b>Overlays</b> tab on the right side allows you to show the specific maps in <b>scaled mode</b>. This means that, if a certain .tga has larger dimensions than the map_regions.tga, the tool will show the overlay of that specific .tga in the way the game engine reads them for region validation. If a map has issues, you can click on the error indicator to view the issues in a dialog. 
+
+To enable the default overlays, click the <b>Show Overlay</b> button. Then click on the map you want to view. Selected regions will be rendered over any default overlays. Click the <b>Hide Overlay</b> button to hide the default overlays again.
+
+Overlays such as <i>map_features.tga</i> are loaded at top most render, and are even rendered on top of the selected region highlighter. They can be toggled on/off by clicking om them without any overlay on/off mode required.
+
+#### Resources
+![Imgur](https://i.imgur.com/nmLynVO.png)
+>
+The <b>Resources</b> tab allows you to view resource allocation. For both <b><i>Hidden Resources</i></b> and <b><i>Trade Resources</i></b>, you can highlight which regions have the selected resource(s). To do so, click the <b>Start Highlight</b> button. Turn the highlight off again by clicking the <b>Stop Highlight</b> button. During highlight mode you can check/uncheck multiple resources. 
+
+Additionaly, <b><i>Trade Resources</i></b> you have defined in <i>descr_strat.txt</i>, can be made visible on the main view using the settings and selecting them in the list. If you have a custom <i>descr_sm_resources.txt</i> in your mod, with unique icons, they will be loaded (as can be seen in example list). If the icon can not be loaded, or is undefined, then a default resource RR icon will be shown.
+Resource quantity etc for Rome Remastered can be seen in the region information after selecting it.
+
+#### Mercenaries
+![Imgur](https://i.imgur.com/CuXwqGN.png)
+>
+The <b>Mercenaries</b> tab provides the same highlight mode as for hidden resources, but then based on the mercenary pools. Select a <b>mercenary pool</b> in the dropdown. The unit entries in the mercenary pool will be updated in the section below the dropdown. Press the <b>Start Highlight</b> button to start the mercenaries highlight mode. During highlight mode, you can select other mercenary pools. Turn the highlight off again by clicking the <b>Stop Highlight</b> button.
 
 ## License
 All tools and features on this repository are created by [Sirrianus Dagovax](https://github.com/Dagovax). All Tools and Features are Free to use, but you are 
